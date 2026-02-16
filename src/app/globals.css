@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+:root {
+  /* Reely Dashboard - Professional Agency Theme */
+  --color-bg-primary: #020617;      /* Near black background */
+  --color-bg-card: #0F172A;         /* Dark slate cards */
+  --color-bg-hover: #1E293B;        /* Hover state */
+  --color-border: #334155;          /* Borders */
+  --color-border-subtle: #1E293B;   /* Subtle borders */
+  
+  --color-text-primary: #F8FAFC;    /* Primary text - white */
+  --color-text-secondary: #94A3B8;  /* Secondary text - gray */
+  --color-text-muted: #64748B;      /* Muted text */
+  
+  /* Accent colors */
+  --color-accent-blue: #3B82F6;     /* Primary accent - trust/tech */
+  --color-accent-green: #10B981;    /* Success - money/growth */
+  --color-accent-amber: #F59E0B;    /* Warning - attention */
+  --color-accent-red: #EF4444;      /* Danger - alerts */
+  --color-accent-purple: #8B5CF6;   /* Special - pipeline */
+}
+
+@theme inline {
+  --color-background: var(--color-bg-primary);
+  --color-foreground: var(--color-text-primary);
+}
+
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-blue);
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+  
+  .card-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .hide-mobile {
+    display: none !important;
+  }
+  
+  .mobile-full {
+    width: 100% !important;
+  }
+}
+
+/* Touch-friendly buttons on mobile */
+@media (pointer: coarse) {
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .card {
+    background: white !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  
+  .amount {
+    color: black !important;
+  }
+  
+  .trend.up {
+    color: #059669 !important;
+  }
+  
+  .trend.down {
+    color: #dc2626 !important;
+  }
+  
+  /* Show light version for print */
+  [class*="bg-gradient"] {
+    background: white !important;
+  }
+  
+  /* Ensure charts print */
+  svg {
+    max-width: 100% !important;
+  }
+}
+
+/* Safe area for notched phones */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: 2px;
+}
+
+/* Selection color */
+::selection {
+  background: var(--color-accent-blue);
+  color: white;
+}
