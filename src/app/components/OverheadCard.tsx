@@ -24,7 +24,7 @@ export default function OverheadCard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/overhead')
+    fetch('/api/scorecard?type=overhead')
       .then(res => res.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { mockExpenses, realClients, realMRR, mockMrrHistory } from '@/lib/mock-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,9 +38,47 @@ function defaultMetrics(): ScorecardMetric[] {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
+  const type = searchParams.get('type')
+
+  // Overhead data handler
+  if (type === 'overhead') {
+    const categories = mockExpenses.map((e, i) => ({
+      ...e,
+      color: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899'][i % 6],
+    }))
+    const total = categories.reduce((sum, c) => sum + c.amount, 0)
+    return NextResponse.json({
+      categories,
+      totalOverhead: total,
+      month: new Date().toISOString().slice(0, 7),
+      note: 'Connect Mercury API to auto-categorize transactions.',
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Revenue / MRR data handler
+  if (type === 'revenue') {
+    const currentMRR = realMRR.mrr
+    const history = mockMrrHistory
+    const prevMonthEntry = history.length > 1 ? history[history.length - 2] : null
+    const previousMRR = prevMonthEntry?.mrr || currentMRR
+    const growth = previousMRR > 0 ? ((currentMRR - previousMRR) / previousMRR) * 100 : 0
+    return NextResponse.json({
+      clients: realClients,
+      currentMRR,
+      previousMRR,
+      growth: Math.round(growth * 10) / 10,
+      activeClients: realMRR.active_clients,
+      avgRevenuePerClient: Math.round(realMRR.avg_revenue_per_client),
+      history: history.map(h => ({ date: h.date, mrr: h.mrr, activeClients: h.active_clients })),
+      note: 'Xero integration coming soon. Current data reflects active retainer clients.',
+      timestamp: new Date().toISOString(),
+    })
+  }
+
   const month = searchParams.get('month') || getCurrentMonth()
 
-  // Support legacy scorecard format for MRRChart
+  // Support legacy scorecard format
   const { mockScorecardData } = await import('@/lib/mock-data')
   const legacy = searchParams.get('quarter')
   if (legacy) {

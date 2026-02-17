@@ -22,7 +22,7 @@ export default function MRRChart() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/revenue')
+    fetch('/api/scorecard?type=revenue')
       .then(res => res.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
