@@ -6,31 +6,26 @@ import { Users, TrendingUp, DollarSign, Building2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { motion } from 'framer-motion'
 
-interface MRRData {
-  currentMrr: {
-    mrr: number
-    active_clients: number
-    avg_revenue_per_client: number
-  } | null
-  mrrHistory: {
-    date: string
-    mrr: number
-    active_clients: number
-  }[]
-  clients?: any[]
+interface RevenueData {
+  clients: { company: string; status: string; monthly_rate: number; additional: number }[]
+  currentMRR: number
+  previousMRR: number
+  growth: number
+  activeClients: number
+  avgRevenuePerClient: number
+  history: { date: string; mrr: number; activeClients: number }[]
+  note?: string
 }
 
 export default function MRRChart() {
-  const [data, setData] = useState<MRRData | null>(null)
+  const [data, setData] = useState<RevenueData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/scorecard')
+    fetch('/api/revenue')
       .then(res => res.json())
-      .then(data => {
-        setData(data)
-        setLoading(false)
-      })
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
 
   if (loading) {
@@ -41,21 +36,18 @@ export default function MRRChart() {
     )
   }
 
-  const current = data?.currentMrr
-  const history = data?.mrrHistory || []
+  const currentMRR = data?.currentMRR || 0
+  const growth = data?.growth || 0
   const clients = data?.clients || []
-
-  const prevMonth = history.length > 1 ? history[history.length - 2].mrr : current?.mrr || 0
-  const currentMrr = current?.mrr || 0
-  const growth = prevMonth > 0 ? ((currentMrr - prevMonth) / prevMonth) * 100 : 0
+  const history = data?.history || []
 
   const chartData = history.map(h => ({
-    month: new Date(h.date).toLocaleDateString('en-US', { month: 'short' }),
+    month: new Date(h.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' }),
     mrr: h.mrr,
   }))
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
@@ -68,18 +60,20 @@ export default function MRRChart() {
           </div>
           <div>
             <h3 className="font-semibold text-[#F8FAFC]">MRR & Revenue</h3>
-            <p className="text-xs text-[#64748B]">{clients.length} Active Clients</p>
+            <p className="text-xs text-[#64748B]">{data?.activeClients || 0} Active Clients</p>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full">
+        <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${
+          growth >= 0 ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
+        }`}>
           <TrendingUp className="w-4 h-4" />
-          <span className="text-sm font-medium">+{growth.toFixed(1)}%</span>
+          {growth >= 0 ? '+' : ''}{growth.toFixed(1)}%
         </div>
       </div>
 
       <div className="mb-6">
-        <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentMrr)}</p>
-        <p className="text-sm text-[#64748B] mt-1">Monthly Recurring Revenue (Real Data)</p>
+        <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentMRR)}</p>
+        <p className="text-sm text-[#64748B] mt-1">Monthly Recurring Revenue</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -88,64 +82,62 @@ export default function MRRChart() {
             <Users className="w-4 h-4 text-blue-400" />
             <span className="text-xs text-[#64748B]">Active Clients</span>
           </div>
-          <p className="text-2xl font-bold text-white">{current?.active_clients || 0}</p>
+          <p className="text-2xl font-bold text-white">{data?.activeClients || 0}</p>
         </div>
         <div className="bg-gradient-to-br from-[#1E293B] to-[#0F172A] rounded-xl p-4 border border-[#334155]/30">
           <div className="flex items-center gap-2 mb-2">
             <Building2 className="w-4 h-4 text-amber-400" />
             <span className="text-xs text-[#64748B]">Avg/Client</span>
           </div>
-          <p className="text-2xl font-bold text-white">
-            {formatCurrency(current?.avg_revenue_per_client || 0)}
-          </p>
+          <p className="text-2xl font-bold text-white">{formatCurrency(data?.avgRevenuePerClient || 0)}</p>
         </div>
       </div>
 
-      {/* Client List */}
-      <div className="mb-6 max-h-40 overflow-y-auto">
+      {/* Client list */}
+      <div className="mb-5 max-h-44 overflow-y-auto">
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-3">Active Clients</p>
-        <div className="space-y-2">
-          {clients.slice(0, 6).map((client, index) => (
-            <motion.div 
+        <div className="space-y-1.5">
+          {clients.filter(c => c.status === 'Active').map((client, index) => (
+            <motion.div
               key={client.company}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="flex items-center justify-between p-2 bg-[#1E293B]/30 rounded-lg"
+              transition={{ delay: index * 0.04 }}
+              className="flex items-center justify-between px-3 py-2 bg-[#1E293B]/30 rounded-lg"
             >
               <span className="text-sm text-[#94A3B8] truncate max-w-[150px]">{client.company}</span>
-              <span className="text-sm font-medium text-white">{formatCurrency(client.monthly_rate + client.additional)}/mo</span>
+              <span className="text-sm font-medium text-white shrink-0">
+                {formatCurrency(client.monthly_rate + client.additional)}/mo
+              </span>
             </motion.div>
           ))}
-          {clients.length > 6 && (
-            <p className="text-xs text-[#64748B] text-center">+{clients.length - 6} more clients</p>
-          )}
         </div>
       </div>
 
+      {/* MRR history chart */}
       {chartData.length > 0 && (
-        <div className="h-32">
+        <div className="h-28">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
-              <XAxis 
-                dataKey="month" 
+              <XAxis
+                dataKey="month"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fontSize: 12, fill: '#64748B' }}
+                tick={{ fontSize: 11, fill: '#64748B' }}
               />
-              <Tooltip 
-                formatter={(value: number) => formatCurrency(value)}
-                contentStyle={{ 
-                  backgroundColor: '#1E293B', 
+              <Tooltip
+                formatter={(value: number) => [formatCurrency(value), 'MRR']}
+                contentStyle={{
+                  backgroundColor: '#1E293B',
                   border: '1px solid #334155',
                   borderRadius: '12px',
-                  color: '#F8FAFC'
+                  color: '#F8FAFC',
                 }}
               />
-              <Bar dataKey="mrr" radius={[6, 6, 0, 0]}>
-                {chartData.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
+              <Bar dataKey="mrr" radius={[5, 5, 0, 0]}>
+                {chartData.map((_, index) => (
+                  <Cell
+                    key={`cell-${index}`}
                     fill={index === chartData.length - 1 ? '#10B981' : '#3B82F6'}
                   />
                 ))}
@@ -153,6 +145,10 @@ export default function MRRChart() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      )}
+
+      {data?.note && (
+        <p className="text-xs text-[#475569] mt-3 border-t border-[#334155]/20 pt-3">{data.note}</p>
       )}
     </motion.div>
   )

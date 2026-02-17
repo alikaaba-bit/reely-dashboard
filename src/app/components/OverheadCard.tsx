@@ -6,27 +6,28 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { Receipt, TrendingDown } from 'lucide-react'
 import { motion } from 'framer-motion'
 
-interface ExpenseData {
+interface ExpenseCategory {
   category: string
   amount: number
+  color: string
 }
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
-
-const mockExpenses = [
-  { category: 'Labour', amount: 18500 },
-  { category: 'Software & Tools', amount: 850 },
-  { category: 'Marketing', amount: 4500 },
-  { category: 'Overheads', amount: 2200 },
-]
+interface OverheadData {
+  categories: ExpenseCategory[]
+  totalOverhead: number
+  month: string
+  note?: string
+}
 
 export default function OverheadCard() {
-  const [data, setData] = useState<ExpenseData[]>([])
+  const [data, setData] = useState<OverheadData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setData(mockExpenses)
-    setLoading(false)
+    fetch('/api/overhead')
+      .then(res => res.json())
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
 
   if (loading) {
@@ -37,10 +38,11 @@ export default function OverheadCard() {
     )
   }
 
-  const totalExpenses = data.reduce((sum, d) => sum + d.amount, 0)
+  const categories = data?.categories || []
+  const total = data?.totalOverhead || 0
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 }}
@@ -57,70 +59,70 @@ export default function OverheadCard() {
           </div>
         </div>
         <div className="text-right">
-          <div className="flex items-center gap-2 text-red-400">
-            <TrendingDown className="w-4 h-4" />
-            <p className="text-2xl font-bold text-white">{formatCurrency(totalExpenses)}</p>
+          <div className="flex items-center gap-2 justify-end">
+            <TrendingDown className="w-4 h-4 text-red-400" />
+            <p className="text-2xl font-bold text-white">{formatCurrency(total)}</p>
           </div>
           <p className="text-xs text-[#64748B]">per month</p>
         </div>
       </div>
 
-      <div className="h-48 mb-6">
+      <div className="h-44 mb-5">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
+              data={categories}
               cx="50%"
               cy="50%"
-              innerRadius={60}
-              outerRadius={80}
-              paddingAngle={5}
+              innerRadius={55}
+              outerRadius={75}
+              paddingAngle={4}
               dataKey="amount"
             >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              {categories.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip 
-              formatter={(value: number) => formatCurrency(value)}
-              contentStyle={{ 
-                backgroundColor: '#1E293B', 
+            <Tooltip
+              formatter={(value: number, name: string) => [formatCurrency(value), name]}
+              nameKey="category"
+              contentStyle={{
+                backgroundColor: '#1E293B',
                 border: '1px solid #334155',
                 borderRadius: '12px',
-                color: '#F8FAFC'
+                color: '#F8FAFC',
               }}
             />
           </PieChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="space-y-3">
-        {data.map((item, index) => (
-          <motion.div 
+      <div className="space-y-2.5">
+        {categories.map((item, index) => (
+          <motion.div
             key={item.category}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1 }}
+            transition={{ delay: index * 0.08 }}
             className="flex items-center justify-between p-3 bg-[#1E293B]/50 rounded-xl border border-[#334155]/30"
           >
             <div className="flex items-center gap-3">
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: COLORS[index % COLORS.length] }}
-              />
+              <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
               <span className="text-sm text-[#94A3B8]">{item.category}</span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-white">
-                {formatCurrency(item.amount)}
-              </span>
+              <span className="text-sm font-semibold text-white">{formatCurrency(item.amount)}</span>
               <span className="text-xs text-[#64748B] w-10 text-right">
-                {((item.amount / totalExpenses) * 100).toFixed(0)}%
+                {total > 0 ? ((item.amount / total) * 100).toFixed(0) : 0}%
               </span>
             </div>
           </motion.div>
         ))}
       </div>
+
+      {data?.note && (
+        <p className="text-xs text-[#475569] mt-4 border-t border-[#334155]/20 pt-3">{data.note}</p>
+      )}
     </motion.div>
   )
 }
