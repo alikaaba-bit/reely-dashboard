@@ -16,24 +16,22 @@ export interface AccountSummary {
   accountId?: string
 }
 
-export interface MercuryTransaction {
-  id: string
-  amount: number
-  description: string
+export interface DailyBalance {
   date: string
-  type: 'debit' | 'credit'
+  balance: number
+}
+
+function getAuthHeader() {
+  const apiKey = process.env.MERCURY_API_KEY
+  if (!apiKey) throw new Error('MERCURY_API_KEY not configured')
+  return { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
 }
 
 export async function getMercuryAccounts(): Promise<MercuryAccount[]> {
-  const apiKey = process.env.MERCURY_API_KEY
-  if (!apiKey) throw new Error('MERCURY_API_KEY not configured')
-
   const response = await fetch(`${MERCURY_API_BASE}/accounts`, {
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: getAuthHeader(),
   })
-
-  if (!response.ok) throw new Error(`Mercury API error: ${response.status} ${response.statusText}`)
-
+  if (!response.ok) throw new Error(`Mercury API error: ${response.statusText}`)
   const data = await response.json()
   return data.accounts || []
 }
@@ -45,7 +43,7 @@ export async function getAllAccountsWithHighbeam(): Promise<AccountSummary[]> {
     const mercuryAccounts = await getMercuryAccounts()
     for (const acc of mercuryAccounts) {
       accounts.push({
-        name: acc.name || 'Mercury Checking',
+        name: acc.name || 'Mercury Account',
         balance: acc.currentBalance || 0,
         type: 'mercury',
         accountId: acc.id,
@@ -55,34 +53,69 @@ export async function getAllAccountsWithHighbeam(): Promise<AccountSummary[]> {
     console.error('Mercury fetch failed:', err)
   }
 
-  // Always add Highbeam from env var (no public API available)
   const highbeamBalance = parseFloat(process.env.HIGHBEAM_BALANCE || '29074.35')
   accounts.push({ name: 'Highbeam', balance: highbeamBalance, type: 'highbeam' })
 
   return accounts
 }
 
-export async function getTotalBalance(): Promise<number> {
-  const accounts = await getAllAccountsWithHighbeam()
-  return accounts.reduce((sum, acc) => sum + acc.balance, 0)
-}
-
-export async function getTransactions(accountId: string, days: number = 30): Promise<MercuryTransaction[]> {
+export async function getBalanceHistory(
+  mercuryAccounts: AccountSummary[],
+  days: number = 30
+): Promise<DailyBalance[]> {
   const apiKey = process.env.MERCURY_API_KEY
-  if (!apiKey) throw new Error('MERCURY_API_KEY not configured')
+  if (!apiKey) return []
 
-  const endDate = new Date()
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - days)
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - days)
+
+  const startStr = start.toISOString().split('T')[0]
+  const endStr = end.toISOString().split('T')[0]
 
   const response = await fetch(
-    `${MERCURY_API_BASE}/account/${accountId}/transactions?` +
-    `start=${startDate.toISOString().split('T')[0]}&end=${endDate.toISOString().split('T')[0]}`,
-    { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
+    `${MERCURY_API_BASE}/transactions?limit=500&start=${startStr}&end=${endStr}`,
+    { headers: getAuthHeader() }
   )
-
-  if (!response.ok) throw new Error(`Mercury transaction error: ${response.statusText}`)
+  if (!response.ok) throw new Error(`Mercury transactions error: ${response.statusText}`)
 
   const data = await response.json()
-  return data.transactions || []
+  const allTxns: { amount: number; postedAt: string; accountId: string; status: string }[] = data.transactions || []
+
+  // Only include bank account transactions (not credit card), only successful ones
+  const bankAccountIds = new Set(mercuryAccounts.filter(a => a.type === 'mercury').map(a => a.accountId))
+  const txns = allTxns.filter(t => bankAccountIds.has(t.accountId) && t.status === 'sent')
+
+  // Current Mercury total balance (as of right now)
+  const mercuryTotal = mercuryAccounts
+    .filter(a => a.type === 'mercury')
+    .reduce((sum, a) => sum + a.balance, 0)
+
+  // Group transactions by date
+  const byDate: Record<string, number> = {}
+  for (const t of txns) {
+    const day = t.postedAt.split('T')[0]
+    byDate[day] = (byDate[day] || 0) + t.amount
+  }
+
+  // Build daily balance working backwards from today
+  // balance[date] = balance at END of that date
+  const result: DailyBalance[] = []
+  let running = mercuryTotal
+
+  // Generate last N days
+  for (let i = 0; i <= days; i++) {
+    const d = new Date(end)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
+
+    result.unshift({ date: dateStr, balance: Math.round(running * 100) / 100 })
+
+    // Go back one more day: undo the transactions that happened on this date
+    if (byDate[dateStr]) {
+      running -= byDate[dateStr]
+    }
+  }
+
+  return result
 }
