@@ -3,6 +3,8 @@ import { getPipelineData } from '@/lib/clickup'
 import { supabaseAdmin } from '@/lib/supabase'
 import { mockClickUpData } from '@/lib/mock-data'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   // Check if using mock data (placeholder API key)
   const isMockMode = !process.env.CLICKUP_API_KEY || 

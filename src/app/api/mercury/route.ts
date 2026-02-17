@@ -3,6 +3,8 @@ import { getTotalBalance } from '@/lib/mercury'
 import { supabaseAdmin } from '@/lib/supabase'
 import { mockMercuryData } from '@/lib/mock-data'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   // Check if using mock data (placeholder API key)
   const isMockMode = !process.env.MERCURY_API_KEY || 
