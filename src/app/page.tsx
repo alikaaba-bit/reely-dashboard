@@ -4,7 +4,6 @@ import PipelineFunnel from './components/PipelineFunnel'
 import OverheadCard from './components/OverheadCard'
 import ScorecardGrid from './components/ScorecardGrid'
 import SyncButton from './components/SyncButton'
-import MockBanner from './components/MockBanner'
 import DashboardActions from './components/DashboardActions'
 import { formatDistanceToNow } from '@/lib/utils'
 
@@ -38,9 +37,6 @@ export default function Dashboard() {
 
       {/* Dashboard Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Mock Data Banner */}
-        <MockBanner />
-
         {/* Last Updated - Mobile Optimized */}
         <div className="flex items-center justify-between mb-4 text-xs sm:text-sm text-[#64748B]">
           <span>
@@ -67,7 +63,6 @@ export default function Dashboard() {
         {/* Footer */}
         <footer className="mt-8 sm:mt-12 text-center text-xs sm:text-sm text-[#64748B]">
           <p>Reely Dashboard • Auto-syncs with Mercury, ClickUp & Scorecards</p>
-          <p className="mt-1">Demo Mode • Connect APIs for live data</p>
           <p className="mt-2 text-[#334155]">
             © {new Date().getFullYear()} Reely Studio
           </p>
