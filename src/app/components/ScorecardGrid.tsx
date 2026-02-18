@@ -3,66 +3,86 @@
 import { useEffect, useState } from 'react'
 import { Trophy, Pencil, Check, X } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { formatCurrency } from '@/lib/utils'
 
-interface ScorecardMetric {
+interface WeeklyMetric {
   id: string
   name: string
-  goal: number | null
-  actual: number | null
-  unit: 'currency' | 'number' | 'percent'
+  weeklyGoal: number
+  unit: 'currency' | 'number'
+  weeks: { w1: number | null; w2: number | null; w3: number | null; w4: number | null }
 }
 
-interface ScorecardData {
+interface WeeklyData {
   month: string
   monthLabel: string
-  metrics: ScorecardMetric[]
+  metrics: WeeklyMetric[]
 }
 
-function fmt(value: number | null, unit: ScorecardMetric['unit']): string {
+type WeekKey = 'w1' | 'w2' | 'w3' | 'w4'
+const WEEK_KEYS: WeekKey[] = ['w1', 'w2', 'w3', 'w4']
+const WEEK_LABELS = ['W1', 'W2', 'W3', 'W4']
+
+function fmtVal(value: number | null, unit: WeeklyMetric['unit']): string {
   if (value === null || value === undefined) return '—'
   if (unit === 'currency') return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-  if (unit === 'percent') return value.toFixed(1) + '%'
   return value.toLocaleString()
 }
 
-function getPct(actual: number | null, goal: number | null): number | null {
-  if (actual === null || goal === null || goal === 0) return null
-  return Math.round((actual / goal) * 100)
+function fmtTotal(value: number, unit: WeeklyMetric['unit']): string {
+  if (unit === 'currency') return formatCurrency(value)
+  return value.toLocaleString()
 }
 
-function StatusDot({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="w-2.5 h-2.5 rounded-full bg-[#334155] inline-block" />
-  if (pct >= 100) return <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shadow-sm shadow-emerald-400/50" />
-  if (pct >= 70) return <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-sm shadow-amber-400/50" />
-  return <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block shadow-sm shadow-red-400/50" />
+function getTotal(metric: WeeklyMetric): number {
+  return WEEK_KEYS.reduce((sum, k) => sum + (metric.weeks[k] ?? 0), 0)
 }
 
-function PctBadge({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-xs text-[#64748B]">—</span>
-  const color = pct >= 100 ? 'text-emerald-400' : pct >= 70 ? 'text-amber-400' : 'text-red-400'
-  return <span className={`text-xs font-semibold ${color}`}>{pct}%</span>
+// Returns pct of weekly goal achieved (null if no value entered)
+function weekPct(val: number | null, goal: number): number | null {
+  if (val === null) return null
+  if (goal === 0) return null
+  return Math.round((val / goal) * 100)
+}
+
+function cellColor(pct: number | null): string {
+  if (pct === null) return 'text-[#475569]'
+  if (pct >= 100) return 'text-emerald-400'
+  if (pct >= 50) return 'text-amber-400'
+  return 'text-red-400'
+}
+
+function MiniBar({ pct }: { pct: number | null }) {
+  if (pct === null) return <div className="h-1 bg-[#1E293B] rounded-full mt-1" />
+  const clamped = Math.min(pct, 100)
+  const barColor = pct >= 100 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'
+  return (
+    <div className="h-1 bg-[#1E293B] rounded-full mt-1 overflow-hidden">
+      <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${clamped}%` }} />
+    </div>
+  )
 }
 
 export default function ScorecardGrid() {
-  const [data, setData] = useState<ScorecardData | null>(null)
+  const [data, setData] = useState<WeeklyData | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<ScorecardMetric[]>([])
+  const [draft, setDraft] = useState<WeeklyMetric[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch('/api/scorecard')
+    fetch('/api/scorecard?type=weekly')
       .then(res => res.json())
-      .then(d => {
+      .then((d: WeeklyData) => {
         setData(d)
-        setDraft(d.metrics || [])
+        setDraft(JSON.parse(JSON.stringify(d.metrics || [])))
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
   const onEdit = () => {
-    setDraft(data?.metrics ? JSON.parse(JSON.stringify(data.metrics)) : [])
+    setDraft(JSON.parse(JSON.stringify(data?.metrics || [])))
     setEditing(true)
   }
 
@@ -74,9 +94,9 @@ export default function ScorecardGrid() {
       const res = await fetch('/api/scorecard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metrics: draft, month: data?.month }),
+        body: JSON.stringify({ type: 'weekly', metrics: draft, month: data?.month }),
       })
-      const saved = await res.json()
+      const saved: WeeklyData = await res.json()
       setData(prev => prev ? { ...prev, metrics: saved.metrics } : prev)
       setEditing(false)
     } finally {
@@ -84,9 +104,14 @@ export default function ScorecardGrid() {
     }
   }
 
-  const updateDraft = (id: string, field: 'goal' | 'actual', raw: string) => {
+  const updateDraft = (id: string, week: WeekKey, raw: string) => {
     const val = raw === '' ? null : parseFloat(raw.replace(/[^0-9.]/g, ''))
-    setDraft(prev => prev.map(m => m.id === id ? { ...m, [field]: isNaN(val as number) ? null : val } : m))
+    const numVal = val === null || isNaN(val) ? null : val
+    setDraft(prev =>
+      prev.map(m =>
+        m.id === id ? { ...m, weeks: { ...m.weeks, [week]: numVal } } : m
+      )
+    )
   }
 
   if (loading) {
@@ -98,11 +123,6 @@ export default function ScorecardGrid() {
   }
 
   const metrics = editing ? draft : (data?.metrics || [])
-  const onTrack = metrics.filter(m => {
-    const pct = getPct(m.actual, m.goal)
-    return pct !== null && pct >= 100
-  }).length
-  const hasData = metrics.some(m => m.goal !== null || m.actual !== null)
 
   return (
     <motion.div
@@ -112,14 +132,14 @@ export default function ScorecardGrid() {
       className="relative overflow-hidden bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] rounded-2xl shadow-2xl border border-[#334155]/50 p-6"
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/25">
             <Trophy className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-[#F8FAFC]">Monthly Scorecard</h3>
-            <p className="text-xs text-[#64748B]">{data?.monthLabel || 'Current Month'} · Ryan Deiss Method</p>
+            <h3 className="font-semibold text-[#F8FAFC]">Weekly Scorecard</h3>
+            <p className="text-xs text-[#64748B]">{data?.monthLabel || 'Current Month'} · Agency KPIs</p>
           </div>
         </div>
         {!editing ? (
@@ -128,7 +148,7 @@ export default function ScorecardGrid() {
             className="flex items-center gap-1.5 text-xs text-[#94A3B8] hover:text-white bg-[#1E293B] hover:bg-[#334155] px-3 py-1.5 rounded-lg border border-[#334155]/50 transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
-            Edit Goals
+            Edit
           </button>
         ) : (
           <div className="flex gap-2">
@@ -149,100 +169,105 @@ export default function ScorecardGrid() {
         )}
       </div>
 
-      {/* Summary bar */}
-      {hasData && !editing && (
-        <div className="flex items-center gap-2 mb-4 px-1">
-          <div className="flex gap-1">
-            {[...Array(metrics.length)].map((_, i) => {
-              const m = metrics[i]
-              const pct = getPct(m.actual, m.goal)
-              return <StatusDot key={m.id} pct={pct} />
-            })}
-          </div>
-          <span className="text-xs text-[#64748B]">
-            {onTrack}/{metrics.length} metrics on track
-          </span>
-        </div>
-      )}
-
-      {/* Legend (only in edit mode) */}
+      {/* Edit hint */}
       {editing && (
         <div className="mb-4 p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-xs text-[#94A3B8]">
-          Enter your monthly goals and where you currently stand. Leave blank if not tracking yet.
+          Enter actuals for each week. Leave blank if the week hasn't happened yet.
         </div>
       )}
 
-      {/* Table */}
-      <div className="space-y-0">
-        {/* Header row */}
-        <div className="grid grid-cols-[1fr_90px_90px_60px_24px] gap-2 px-3 pb-2 text-xs font-semibold text-[#64748B] uppercase tracking-wider border-b border-[#334155]/30">
-          <span>Metric</span>
-          <span className="text-right">Goal</span>
-          <span className="text-right">Actual</span>
-          <span className="text-right">% Goal</span>
-          <span />
-        </div>
+      {/* Table — scrollable on small screens */}
+      <div className="overflow-x-auto -mx-1">
+        <table className="w-full min-w-[480px] text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-[#334155]/30">
+              <th className="text-left py-2 px-2 text-xs font-semibold text-[#64748B] uppercase tracking-wider w-[35%]">
+                Metric
+              </th>
+              {WEEK_LABELS.map(label => (
+                <th key={label} className="text-center py-2 px-1 text-xs font-semibold text-[#64748B] uppercase tracking-wider w-[12%]">
+                  {label}
+                </th>
+              ))}
+              <th className="text-right py-2 px-2 text-xs font-semibold text-[#64748B] uppercase tracking-wider">
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.map((metric, index) => {
+              const total = getTotal(metric)
+              const monthlyGoal = metric.weeklyGoal * 4
+              const totalPct = weekPct(total, monthlyGoal)
 
-        {metrics.map((metric, index) => {
-          const pct = getPct(metric.actual, metric.goal)
-          return (
-            <motion.div
-              key={metric.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="grid grid-cols-[1fr_90px_90px_60px_24px] gap-2 items-center px-3 py-3 border-b border-[#334155]/20 last:border-0 hover:bg-[#1E293B]/30 rounded-lg transition-colors"
-            >
-              <span className="text-sm text-[#F8FAFC] font-medium truncate">{metric.name}</span>
+              return (
+                <motion.tr
+                  key={metric.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="border-b border-[#334155]/20 last:border-0 hover:bg-[#1E293B]/20 transition-colors"
+                >
+                  {/* Metric name + goal */}
+                  <td className="py-3 px-2">
+                    <p className="text-[#F8FAFC] font-medium text-xs leading-tight">{metric.name}</p>
+                    <p className="text-[10px] text-[#475569] mt-0.5">
+                      Goal: {fmtVal(metric.weeklyGoal, metric.unit)}/wk
+                    </p>
+                  </td>
 
-              {/* Goal */}
-              {editing ? (
-                <input
-                  type="text"
-                  defaultValue={metric.goal !== null ? String(metric.goal) : ''}
-                  onChange={e => updateDraft(metric.id, 'goal', e.target.value)}
-                  placeholder="—"
-                  className="text-right text-sm bg-[#1E293B] border border-[#334155] rounded-lg px-2 py-1 text-white placeholder-[#475569] focus:outline-none focus:border-indigo-500 w-full"
-                />
-              ) : (
-                <span className="text-sm text-right text-[#94A3B8]">{fmt(metric.goal, metric.unit)}</span>
-              )}
+                  {/* Week cells */}
+                  {WEEK_KEYS.map(wk => {
+                    const val = metric.weeks[wk]
+                    const pct = weekPct(val, metric.weeklyGoal)
+                    return (
+                      <td key={wk} className="py-2 px-1 text-center align-top">
+                        {editing ? (
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            defaultValue={val !== null ? String(val) : ''}
+                            onChange={e => updateDraft(metric.id, wk, e.target.value)}
+                            placeholder="—"
+                            className="w-full text-center text-xs bg-[#1E293B] border border-[#334155] rounded-md px-1 py-1.5 text-white placeholder-[#475569] focus:outline-none focus:border-indigo-500"
+                          />
+                        ) : (
+                          <div>
+                            <span className={`text-xs font-semibold ${cellColor(pct)}`}>
+                              {fmtVal(val, metric.unit)}
+                            </span>
+                            <MiniBar pct={pct} />
+                          </div>
+                        )}
+                      </td>
+                    )
+                  })}
 
-              {/* Actual */}
-              {editing ? (
-                <input
-                  type="text"
-                  defaultValue={metric.actual !== null ? String(metric.actual) : ''}
-                  onChange={e => updateDraft(metric.id, 'actual', e.target.value)}
-                  placeholder="—"
-                  className="text-right text-sm bg-[#1E293B] border border-[#334155] rounded-lg px-2 py-1 text-white placeholder-[#475569] focus:outline-none focus:border-indigo-500 w-full"
-                />
-              ) : (
-                <span className={`text-sm text-right font-semibold ${
-                  pct !== null && pct >= 100 ? 'text-emerald-400' :
-                  pct !== null && pct >= 70 ? 'text-amber-400' :
-                  pct !== null ? 'text-red-400' : 'text-[#94A3B8]'
-                }`}>{fmt(metric.actual, metric.unit)}</span>
-              )}
-
-              <div className="text-right"><PctBadge pct={pct} /></div>
-              <div className="flex justify-center"><StatusDot pct={pct} /></div>
-            </motion.div>
-          )
-        })}
+                  {/* Total / MTD */}
+                  <td className="py-2 px-2 text-right align-top">
+                    <span className={`text-xs font-bold ${cellColor(totalPct)}`}>
+                      {fmtTotal(total, metric.unit)}
+                    </span>
+                    <MiniBar pct={totalPct} />
+                  </td>
+                </motion.tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Legend */}
       {!editing && (
-        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[#334155]/30">
+        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[#334155]/30 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> On track (≥100%)
+            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> On target (≥100%)
           </div>
           <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
-            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Behind (70–99%)
+            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Close (50–99%)
           </div>
           <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
-            <span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Off track (&lt;70%)
+            <span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Off track (&lt;50%)
           </div>
         </div>
       )}

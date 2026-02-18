@@ -2,6 +2,7 @@ import CashCard from './components/CashCard'
 import MRRChart from './components/MRRChart'
 import PipelineFunnel from './components/PipelineFunnel'
 import OverheadCard from './components/OverheadCard'
+import ProfitCard from './components/ProfitCard'
 import ScorecardGrid from './components/ScorecardGrid'
 import SyncButton from './components/SyncButton'
 import DashboardActions from './components/DashboardActions'
@@ -26,7 +27,7 @@ export default function Dashboard() {
                 <p className="text-xs sm:text-sm text-[#64748B]">Mission Command Center</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <DashboardActions />
               <SyncButton />
@@ -47,11 +48,16 @@ export default function Dashboard() {
           </span>
         </div>
 
-        {/* Top Row - Financial Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 card-grid">
+        {/* Top Row - Cash + MRR */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6 card-grid">
           <CashCard />
           <MRRChart />
+        </div>
+
+        {/* Financial Summary Row - Overhead + Profit */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 card-grid">
           <OverheadCard />
+          <ProfitCard />
         </div>
 
         {/* Middle Row - Pipeline & Scorecard */}

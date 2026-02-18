@@ -11,9 +11,29 @@ export interface ScorecardMetric {
   unit: 'currency' | 'number' | 'percent'
 }
 
+export interface WeeklyMetric {
+  id: string
+  name: string
+  weeklyGoal: number
+  unit: 'currency' | 'number'
+  weeks: { w1: number | null; w2: number | null; w3: number | null; w4: number | null }
+}
+
 // In-memory store — persists for server lifetime, resets on redeploy
 // Replace with Supabase when credentials are added
 const store: Record<string, ScorecardMetric[]> = {}
+const weeklyStore: Record<string, WeeklyMetric[]> = {}
+
+function defaultWeeklyMetrics(): WeeklyMetric[] {
+  return [
+    { id: 'leads', name: 'New Leads', weeklyGoal: 10, unit: 'number', weeks: { w1: null, w2: null, w3: null, w4: null } },
+    { id: 'calls', name: 'Discovery Calls', weeklyGoal: 5, unit: 'number', weeks: { w1: null, w2: null, w3: null, w4: null } },
+    { id: 'proposals', name: 'Proposals Sent', weeklyGoal: 3, unit: 'number', weeks: { w1: null, w2: null, w3: null, w4: null } },
+    { id: 'clients', name: 'New Clients Signed', weeklyGoal: 1, unit: 'number', weeks: { w1: null, w2: null, w3: null, w4: null } },
+    { id: 'revenue', name: 'Revenue Collected', weeklyGoal: 8460, unit: 'currency', weeks: { w1: null, w2: null, w3: null, w4: null } },
+    { id: 'content', name: 'Content Delivered', weeklyGoal: 20, unit: 'number', weeks: { w1: null, w2: null, w3: null, w4: null } },
+  ]
+}
 
 function getCurrentMonth(): string {
   return new Date().toISOString().slice(0, 7)
@@ -39,6 +59,34 @@ function defaultMetrics(): ScorecardMetric[] {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
+
+  // Profit data handler
+  if (type === 'profit') {
+    const revenue = realMRR.mrr
+    const expenses = mockExpenses.reduce((s, e) => s + e.amount, 0)
+    const netProfit = revenue - expenses
+    const margin = revenue > 0 ? (netProfit / revenue) * 100 : 0
+    return NextResponse.json({
+      revenue,
+      expenses,
+      expenseBreakdown: mockExpenses,
+      netProfit,
+      margin: Math.round(margin * 10) / 10,
+      month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    })
+  }
+
+  // Weekly scorecard handler
+  if (type === 'weekly') {
+    const month = getCurrentMonth()
+    const metrics = weeklyStore[`weekly_${month}`] || defaultWeeklyMetrics()
+    return NextResponse.json({
+      month,
+      monthLabel: getMonthLabel(month),
+      metrics,
+      lastUpdated: new Date().toISOString(),
+    })
+  }
 
   // Overhead data handler
   if (type === 'overhead') {
@@ -99,6 +147,24 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const month = body.month || getCurrentMonth()
+
+    // Weekly scorecard save
+    if (body.type === 'weekly') {
+      const metrics: WeeklyMetric[] = body.metrics
+      if (!Array.isArray(metrics)) {
+        return NextResponse.json({ error: 'metrics must be an array' }, { status: 400 })
+      }
+      weeklyStore[`weekly_${month}`] = metrics
+      return NextResponse.json({
+        success: true,
+        month,
+        monthLabel: getMonthLabel(month),
+        metrics,
+        savedAt: new Date().toISOString(),
+      })
+    }
+
+    // Legacy monthly scorecard save
     const metrics: ScorecardMetric[] = body.metrics
 
     if (!Array.isArray(metrics)) {
