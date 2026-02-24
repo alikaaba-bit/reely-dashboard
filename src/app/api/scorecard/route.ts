@@ -63,7 +63,24 @@ export async function GET(request: Request) {
   // Monthly goal tracking
   if (type === 'goal') {
     const currentMRR = realMRR.mrr
-    const monthlyGoal = 50000 // TODO: Make this configurable via env var or database
+
+    // Get goal from synced data or fallback to $50,000
+    let monthlyGoal = 50000
+    const currentMonth = new Date().toISOString().slice(0, 7) // Format: "2026-03"
+
+    try {
+      const { getSyncedData } = await import('../sync/route')
+      const synced = getSyncedData()
+      if (synced?.monthlyGoals) {
+        const monthGoal = synced.monthlyGoals.find(g => g.month === currentMonth)
+        if (monthGoal) {
+          monthlyGoal = monthGoal.goal
+        }
+      }
+    } catch {
+      // Fallback to default
+    }
+
     const gap = monthlyGoal - currentMRR
     const percentOfGoal = (currentMRR / monthlyGoal) * 100
 

@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic'
 
 const SHEET_ID = '1GIDvoOpWFFAeLljQ_2XiJk92r1F-907_'
 const CLIENTS_GID = '1208786387' // Clients tab
-const EXPENSES_GID = '2075199276' // Expenses tab (from previous work)
+const EXPENSES_GID = '2075199276' // Expenses tab
+const SCORECARD_GID = '0' // Main scorecard tab (usually first tab, gid=0)
 
 interface ClientRow {
   company: string
@@ -19,6 +20,11 @@ interface ExpenseRow {
   amount: number
 }
 
+interface MonthlyGoal {
+  month: string // Format: "2026-03" for March 2026
+  goal: number
+}
+
 // In-memory store for synced data (persists during server lifetime)
 let syncedData: {
   clients: ClientRow[]
@@ -27,6 +33,7 @@ let syncedData: {
   oneOffProjects: number
   expenses: ExpenseRow[]
   totalExpenses: number
+  monthlyGoals: MonthlyGoal[]
   lastSync: string
 } | null = null
 
@@ -37,10 +44,11 @@ export function getSyncedData() {
 
 export async function POST(request: Request) {
   try {
-    // Fetch both tabs in parallel
-    const [clientsRes, expensesRes] = await Promise.all([
+    // Fetch all tabs in parallel
+    const [clientsRes, expensesRes, scorecardRes] = await Promise.all([
       fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${CLIENTS_GID}`),
-      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${EXPENSES_GID}`)
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${EXPENSES_GID}`),
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SCORECARD_GID}`)
     ])
 
     if (!clientsRes.ok || !expensesRes.ok) {
@@ -48,6 +56,7 @@ export async function POST(request: Request) {
         error: 'Failed to fetch Google Sheet',
         clientsStatus: clientsRes.status,
         expensesStatus: expensesRes.status,
+        scorecardStatus: scorecardRes.status,
       }, { status: 500 })
     }
 
@@ -101,6 +110,52 @@ export async function POST(request: Request) {
       totalExpenses += amount
     }
 
+    // Parse Scorecard Tab (Monthly Goals)
+    const scorecardCsv = await scorecardRes.text()
+    const scorecardLines = scorecardCsv.trim().split('\n')
+
+    const monthlyGoals: MonthlyGoal[] = []
+    const monthMap: Record<string, number> = {
+      'january': 1, 'jan': 1,
+      'february': 2, 'feb': 2,
+      'march': 3, 'mar': 3,
+      'april': 4, 'apr': 4,
+      'may': 5,
+      'june': 6, 'jun': 6,
+      'july': 7, 'jul': 7,
+      'august': 8, 'aug': 8,
+      'september': 9, 'sep': 9, 'sept': 9,
+      'october': 10, 'oct': 10,
+      'november': 11, 'nov': 11,
+      'december': 12, 'dec': 12,
+    }
+
+    const currentYear = new Date().getFullYear()
+
+    // Parse scorecard looking for month + goal columns
+    for (let i = 1; i < scorecardLines.length; i++) {
+      const cols = scorecardLines[i].split(',').map(c => c.trim().replace(/"/g, ''))
+      if (cols.length < 2) continue
+
+      // Look for month name in first column
+      const monthStr = cols[0]?.toLowerCase() || ''
+      const goalValue = parseFloat(cols[1]?.replace(/[$,]/g, '') || '0')
+
+      // Find month number
+      let monthNum = 0
+      for (const [key, num] of Object.entries(monthMap)) {
+        if (monthStr.includes(key)) {
+          monthNum = num
+          break
+        }
+      }
+
+      if (monthNum > 0 && goalValue > 0) {
+        const monthKey = `${currentYear}-${String(monthNum).padStart(2, '0')}`
+        monthlyGoals.push({ month: monthKey, goal: goalValue })
+      }
+    }
+
     // Store in memory
     syncedData = {
       clients,
@@ -109,6 +164,7 @@ export async function POST(request: Request) {
       oneOffProjects: totalOneOff,
       expenses,
       totalExpenses,
+      monthlyGoals,
       lastSync: new Date().toISOString(),
     }
 
@@ -120,7 +176,8 @@ export async function POST(request: Request) {
       one_off_projects: totalOneOff,
       expenses: expenses.length,
       total_expenses: totalExpenses,
-      message: `Synced ${clients.length} clients (${activeCount} active) and ${expenses.length} expense categories`,
+      monthly_goals: monthlyGoals.length,
+      message: `Synced ${clients.length} clients (${activeCount} active), ${expenses.length} expenses, ${monthlyGoals.length} monthly goals`,
     })
   } catch (error) {
     return NextResponse.json({
@@ -136,12 +193,14 @@ export async function GET() {
     sheet_id: SHEET_ID,
     clients_gid: CLIENTS_GID,
     expenses_gid: EXPENSES_GID,
+    scorecard_gid: SCORECARD_GID,
     last_sync: syncedData?.lastSync || 'Never synced',
     synced_data: syncedData ? {
       clients: syncedData.activeClients,
       mrr: syncedData.mrr,
       expenses_count: syncedData.expenses.length,
       total_expenses: syncedData.totalExpenses,
+      monthly_goals_count: syncedData.monthlyGoals.length,
     } : null
   })
 }
