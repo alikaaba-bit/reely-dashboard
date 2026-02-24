@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 const SHEET_ID = '1GIDvoOpWFFAeLljQ_2XiJk92r1F-907_'
-const CLIENTS_GID = process.env.GOOGLE_SHEET_CLIENTS_GID || '0' // Set via env var
+const CLIENTS_GID = '1208786387' // Clients tab
+const EXPENSES_GID = '2075199276' // Expenses tab (from previous work)
 
 interface ClientRow {
   company: string
@@ -13,12 +14,19 @@ interface ClientRow {
   one_off_project?: number
 }
 
+interface ExpenseRow {
+  category: string
+  amount: number
+}
+
 // In-memory store for synced data (persists during server lifetime)
 let syncedData: {
   clients: ClientRow[]
   mrr: number
   activeClients: number
   oneOffProjects: number
+  expenses: ExpenseRow[]
+  totalExpenses: number
   lastSync: string
 } | null = null
 
@@ -29,34 +37,31 @@ export function getSyncedData() {
 
 export async function POST(request: Request) {
   try {
-    // Fetch clients sheet
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${CLIENTS_GID}`
-    const response = await fetch(url)
+    // Fetch both tabs in parallel
+    const [clientsRes, expensesRes] = await Promise.all([
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${CLIENTS_GID}`),
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${EXPENSES_GID}`)
+    ])
 
-    if (!response.ok) {
+    if (!clientsRes.ok || !expensesRes.ok) {
       return NextResponse.json({
         error: 'Failed to fetch Google Sheet',
-        details: `Status: ${response.status}`,
-        hint: 'Make sure GOOGLE_SHEET_CLIENTS_GID env var is set correctly'
+        clientsStatus: clientsRes.status,
+        expensesStatus: expensesRes.status,
       }, { status: 500 })
     }
 
-    const csvText = await response.text()
-    const lines = csvText.trim().split('\n')
+    // Parse Clients Tab
+    const clientsCsv = await clientsRes.text()
+    const clientLines = clientsCsv.trim().split('\n')
 
-    if (lines.length < 2) {
-      return NextResponse.json({ error: 'Empty sheet' }, { status: 400 })
-    }
-
-    // Parse CSV (assumes: Company, Status, Monthly Rate, Additional, One-Off Project)
     const clients: ClientRow[] = []
     let totalMRR = 0
     let activeCount = 0
     let totalOneOff = 0
 
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map(c => c.trim().replace(/"/g, ''))
-
+    for (let i = 1; i < clientLines.length; i++) {
+      const cols = clientLines[i].split(',').map(c => c.trim().replace(/"/g, ''))
       if (cols.length < 3) continue
 
       const company = cols[0]
@@ -76,12 +81,34 @@ export async function POST(request: Request) {
       }
     }
 
-    // Store in memory (persists during server lifetime, survives deployments via data persistence)
+    // Parse Expenses Tab
+    const expensesCsv = await expensesRes.text()
+    const expenseLines = expensesCsv.trim().split('\n')
+
+    const expenses: ExpenseRow[] = []
+    let totalExpenses = 0
+
+    for (let i = 1; i < expenseLines.length; i++) {
+      const cols = expenseLines[i].split(',').map(c => c.trim().replace(/"/g, ''))
+      if (cols.length < 2) continue
+
+      const category = cols[0]
+      const amount = parseFloat(cols[1]?.replace(/[$,]/g, '') || '0')
+
+      if (!category || category.toLowerCase().includes('total') || amount === 0) continue
+
+      expenses.push({ category, amount })
+      totalExpenses += amount
+    }
+
+    // Store in memory
     syncedData = {
       clients,
       mrr: totalMRR,
       activeClients: activeCount,
       oneOffProjects: totalOneOff,
+      expenses,
+      totalExpenses,
       lastSync: new Date().toISOString(),
     }
 
@@ -91,7 +118,9 @@ export async function POST(request: Request) {
       clients: activeCount,
       mrr: totalMRR,
       one_off_projects: totalOneOff,
-      message: `Synced ${clients.length} clients (${activeCount} active)`,
+      expenses: expenses.length,
+      total_expenses: totalExpenses,
+      message: `Synced ${clients.length} clients (${activeCount} active) and ${expenses.length} expense categories`,
     })
   } catch (error) {
     return NextResponse.json({
@@ -106,6 +135,13 @@ export async function GET() {
     message: 'Use POST to trigger sync',
     sheet_id: SHEET_ID,
     clients_gid: CLIENTS_GID,
-    hint: 'Set GOOGLE_SHEET_CLIENTS_GID env var with the correct gid from Google Sheets URL'
+    expenses_gid: EXPENSES_GID,
+    last_sync: syncedData?.lastSync || 'Never synced',
+    synced_data: syncedData ? {
+      clients: syncedData.activeClients,
+      mrr: syncedData.mrr,
+      expenses_count: syncedData.expenses.length,
+      total_expenses: syncedData.totalExpenses,
+    } : null
   })
 }

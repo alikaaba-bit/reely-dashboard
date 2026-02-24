@@ -221,9 +221,25 @@ export const mockScorecardData = {
 // Expenses breakdown (from Google Sheet: Reely Master Scorecard 2026)
 // Source: https://docs.google.com/spreadsheets/d/1GIDvoOpWFFAeLljQ_2XiJk92r1F-907_/edit (Expenses tab)
 // Last updated: Feb 2026
-export const mockExpenses = [
+const staticExpenses = [
   { category: 'Payroll', amount: 14718 },
   { category: 'Software & Marketing', amount: 5609 },
   { category: 'Office & Facilities', amount: 186 },
   { category: 'Bank & Accounting', amount: 153 },
 ]
+
+// Function to get current expenses (checks for synced data first)
+export function getCurrentExpenses() {
+  try {
+    const { getSyncedData } = require('../app/api/sync/route')
+    const synced = getSyncedData()
+    if (synced && synced.expenses && synced.expenses.length > 0) {
+      return synced.expenses
+    }
+  } catch {
+    // Fallback to static if sync data not available
+  }
+  return staticExpenses
+}
+
+export const mockExpenses = getCurrentExpenses()
