@@ -4,6 +4,7 @@ import PipelineFunnel from './components/PipelineFunnel'
 import OverheadCard from './components/OverheadCard'
 import ProfitCard from './components/ProfitCard'
 import SyncButton from './components/SyncButton'
+import XeroConnectButton from './components/XeroConnectButton'
 import DashboardActions from './components/DashboardActions'
 import ValuationCard from './components/ValuationCard'
 import MetricsCard from './components/MetricsCard'
@@ -32,6 +33,7 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-2">
               <DashboardActions />
+              <XeroConnectButton />
               <SyncButton />
             </div>
           </div>
