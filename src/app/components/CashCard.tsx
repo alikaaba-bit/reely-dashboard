@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { formatCurrency, calculateBurnRate, calculateRunway } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -19,14 +19,27 @@ interface CashData {
   mockMode?: boolean
 }
 
+interface ProfitData {
+  netProfit: number
+  revenue: number
+  expenses: number
+}
+
 export default function CashCard() {
   const [data, setData] = useState<CashData | null>(null)
+  const [profitData, setProfitData] = useState<ProfitData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/mercury')
-      .then(res => res.json())
-      .then(d => { setData(d); setLoading(false) })
+    Promise.all([
+      fetch('/api/mercury').then(res => res.json()),
+      fetch('/api/scorecard?type=profit').then(res => res.json())
+    ])
+      .then(([mercury, profit]) => {
+        setData(mercury)
+        setProfitData(profit)
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [])
 
@@ -42,9 +55,12 @@ export default function CashCard() {
   const accounts = data?.accounts || []
   const history = data?.history || []
 
-  const balances = history.map(h => h.balance)
-  const burnRate = calculateBurnRate(balances)
-  const runway = calculateRunway(totalBalance, burnRate)
+  // Use actual monthly profit for burn rate (negative = burning, positive = profit)
+  const monthlyProfit = profitData?.netProfit || 0
+  const monthlyBurnRate = -monthlyProfit // Negative profit means burning cash
+
+  // Calculate runway: if burning (negative profit), divide cash by burn rate
+  const runway = monthlyProfit < 0 ? Math.floor(totalBalance / Math.abs(monthlyProfit)) : Infinity
 
   const lastWeekBalance = history.length > 7 ? history[history.length - 8].balance : totalBalance
   const weeklyChange = totalBalance - lastWeekBalance
@@ -123,9 +139,9 @@ export default function CashCard() {
         {/* Burn / Runway */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="bg-[#1E293B]/50 rounded-xl p-4 border border-[#334155]/30">
-            <p className="text-xs text-[#64748B] uppercase tracking-wider font-medium">Monthly Burn</p>
-            <p className={`text-xl font-bold mt-1 ${burnRate < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-              {burnRate < 0 ? '-' : '+'}{formatCurrency(Math.abs(burnRate))}
+            <p className="text-xs text-[#64748B] uppercase tracking-wider font-medium">Monthly Profit</p>
+            <p className={`text-xl font-bold mt-1 ${monthlyProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {monthlyProfit >= 0 ? '+' : ''}{formatCurrency(monthlyProfit)}
             </p>
           </div>
           <div className="bg-[#1E293B]/50 rounded-xl p-4 border border-[#334155]/30">
