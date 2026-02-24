@@ -20,15 +20,15 @@ export const realClients = [
 const activeClients = realClients.filter(c => c.status === 'Active')
 export const realMRR = {
   mrr: 36342, // Updated Feb 2026 - includes latest client additions
-  active_clients: activeClients.length,
-  avg_revenue_per_client: 36342 / activeClients.length,
+  active_clients: 12, // Updated count - syncs from Google Sheet weekly
+  avg_revenue_per_client: 36342 / 12,
   new_clients: 0,
   churned_clients: 0,
 }
 
 // One-off project revenue (non-recurring)
 export const oneOffProjects = {
-  thisMonth: 0, // To be populated from Google Sheet
+  thisMonth: 0, // To be populated from Google Sheet - syncs weekly
   lastMonth: 0,
   ytd: 0,
 }

@@ -1,0 +1,17 @@
+name: Sync Clients from Google Sheets
+
+on:
+  schedule:
+    # Every Friday at 5:00 PM PST (1:00 AM UTC Saturday)
+    - cron: '0 1 * * 6'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger sync endpoint
+        run: |
+          curl -X POST https://reely-dashboard-production-6bcc.up.railway.app/api/sync \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP Status: %{http_code}\n"
