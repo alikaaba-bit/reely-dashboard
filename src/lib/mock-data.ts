@@ -18,10 +18,13 @@ export const realClients = [
 
 // Calculate real MRR totals
 const activeClients = realClients.filter(c => c.status === 'Active')
+const calculatedMRR = activeClients.reduce((sum, client) => sum + client.monthly_rate + client.additional, 0)
+const activeCount = activeClients.length
+
 export const realMRR = {
-  mrr: 36342, // Updated Feb 2026 - includes latest client additions
-  active_clients: 12, // Updated count - syncs from Google Sheet weekly
-  avg_revenue_per_client: 36342 / 12,
+  mrr: calculatedMRR,
+  active_clients: activeCount,
+  avg_revenue_per_client: activeCount > 0 ? calculatedMRR / activeCount : 0,
   new_clients: 0,
   churned_clients: 0,
 }

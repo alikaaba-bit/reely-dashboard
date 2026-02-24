@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     const percentOfGoal = (currentMRR / monthlyGoal) * 100
 
     let status: 'on-track' | 'at-risk' | 'off-track'
-    if (percentOfGoal >= 95) status = 'on-track'
+    if (percentOfGoal >= 100) status = 'on-track'
     else if (percentOfGoal >= 80) status = 'at-risk'
     else status = 'off-track'
 
