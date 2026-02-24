@@ -60,6 +60,50 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
 
+  // Valuation data handler
+  if (type === 'valuation') {
+    const arr = realMRR.mrr * 12
+    return NextResponse.json({
+      mrr: realMRR.mrr,
+      arr,
+      valuations: {
+        conservative: arr * 4,
+        market: arr * 5,
+        aggressive: arr * 6,
+      },
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Financial metrics handler
+  if (type === 'metrics') {
+    const revenue = realMRR.mrr
+    const expenses = mockExpenses.reduce((s, e) => s + e.amount, 0)
+    const monthlyProfit = revenue - expenses
+    const margin = revenue > 0 ? (monthlyProfit / revenue) * 100 : 0
+    const runRate = revenue * 12
+
+    // Fetch cash balance from mercury
+    let cashBalance = 42417 // fallback
+    try {
+      const mercuryRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/mercury`)
+      const mercuryData = await mercuryRes.json()
+      cashBalance = mercuryData.totalBalance || cashBalance
+    } catch {}
+
+    const runway = monthlyProfit < 0 ? Math.floor(cashBalance / Math.abs(monthlyProfit)) : 0
+
+    return NextResponse.json({
+      runRate,
+      monthlyProfit,
+      profitMargin: margin,
+      cashBalance,
+      runway,
+      burnRate: monthlyProfit < 0 ? Math.abs(monthlyProfit) : 0,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
   // Profit data handler
   if (type === 'profit') {
     const revenue = realMRR.mrr

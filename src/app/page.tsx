@@ -6,6 +6,8 @@ import ProfitCard from './components/ProfitCard'
 import ScorecardGrid from './components/ScorecardGrid'
 import SyncButton from './components/SyncButton'
 import DashboardActions from './components/DashboardActions'
+import ValuationCard from './components/ValuationCard'
+import MetricsCard from './components/MetricsCard'
 import { formatDistanceToNow } from '@/lib/utils'
 
 export default function Dashboard() {
@@ -58,6 +60,12 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 card-grid">
           <OverheadCard />
           <ProfitCard />
+        </div>
+
+        {/* SaaS Metrics Row - Valuation + Health */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 card-grid">
+          <ValuationCard />
+          <MetricsCard />
         </div>
 
         {/* Middle Row - Pipeline & Scorecard */}

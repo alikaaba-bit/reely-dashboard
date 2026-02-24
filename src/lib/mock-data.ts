@@ -19,11 +19,18 @@ export const realClients = [
 // Calculate real MRR totals
 const activeClients = realClients.filter(c => c.status === 'Active')
 export const realMRR = {
-  mrr: activeClients.reduce((sum, c) => sum + c.monthly_rate + c.additional, 0),
+  mrr: 36342, // Updated Feb 2026 - includes latest client additions
   active_clients: activeClients.length,
-  avg_revenue_per_client: activeClients.reduce((sum, c) => sum + c.monthly_rate + c.additional, 0) / activeClients.length,
+  avg_revenue_per_client: 36342 / activeClients.length,
   new_clients: 0,
   churned_clients: 0,
+}
+
+// One-off project revenue (non-recurring)
+export const oneOffProjects = {
+  thisMonth: 0, // To be populated from Google Sheet
+  lastMonth: 0,
+  ytd: 0,
 }
 
 // Mock history based on real MRR trajectory (estimated)
@@ -33,7 +40,7 @@ export const mockMrrHistory = [
   { date: '2025-11-01', mrr: 31000, active_clients: 10 },
   { date: '2025-12-01', mrr: 32500, active_clients: 10 },
   { date: '2026-01-01', mrr: 33842, active_clients: 11 },
-  { date: '2026-02-01', mrr: 33842, active_clients: 11 },
+  { date: '2026-02-01', mrr: 36342, active_clients: 11 },
 ]
 
 // Mock Mercury data (placeholder until real API connected)
