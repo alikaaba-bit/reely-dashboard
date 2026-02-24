@@ -55,7 +55,7 @@ export default function OverheadCard() {
           </div>
           <div>
             <h3 className="font-semibold text-[#F8FAFC]">Overheads</h3>
-            <p className="text-xs text-[#64748B]">Monthly Expenses</p>
+            <p className="text-xs text-[#64748B]">Monthly Burn</p>
           </div>
         </div>
         <div className="text-right">

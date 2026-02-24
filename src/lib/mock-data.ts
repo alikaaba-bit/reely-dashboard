@@ -18,39 +18,13 @@ export const realClients = [
 
 // Calculate real MRR totals
 const activeClients = realClients.filter(c => c.status === 'Active')
-const calculatedMRR = activeClients.reduce((sum, client) => sum + client.monthly_rate + client.additional, 0)
-const activeCount = activeClients.length
-
-// Function to get current MRR (checks for synced data first)
-export function getCurrentMRR() {
-  try {
-    // Try to import synced data from sync route
-    // This will be populated when the sync button is clicked
-    const { getSyncedData } = require('../app/api/sync/route')
-    const synced = getSyncedData()
-    if (synced) {
-      return {
-        mrr: synced.mrr,
-        active_clients: synced.activeClients,
-        avg_revenue_per_client: synced.activeClients > 0 ? synced.mrr / synced.activeClients : 0,
-        new_clients: 0,
-        churned_clients: 0,
-      }
-    }
-  } catch {
-    // Fallback to calculated values if sync data not available
-  }
-
-  return {
-    mrr: calculatedMRR,
-    active_clients: activeCount,
-    avg_revenue_per_client: activeCount > 0 ? calculatedMRR / activeCount : 0,
-    new_clients: 0,
-    churned_clients: 0,
-  }
+export const realMRR = {
+  mrr: 36342, // Updated Feb 2026 - includes latest client additions
+  active_clients: 12, // Updated count - syncs from Google Sheet weekly
+  avg_revenue_per_client: 36342 / 12,
+  new_clients: 0,
+  churned_clients: 0,
 }
-
-export const realMRR = getCurrentMRR()
 
 // One-off project revenue (non-recurring)
 export const oneOffProjects = {
@@ -221,25 +195,9 @@ export const mockScorecardData = {
 // Expenses breakdown (from Google Sheet: Reely Master Scorecard 2026)
 // Source: https://docs.google.com/spreadsheets/d/1GIDvoOpWFFAeLljQ_2XiJk92r1F-907_/edit (Expenses tab)
 // Last updated: Feb 2026
-const staticExpenses = [
+export const mockExpenses = [
   { category: 'Payroll', amount: 14718 },
   { category: 'Software & Marketing', amount: 5609 },
   { category: 'Office & Facilities', amount: 186 },
   { category: 'Bank & Accounting', amount: 153 },
 ]
-
-// Function to get current expenses (checks for synced data first)
-export function getCurrentExpenses() {
-  try {
-    const { getSyncedData } = require('../app/api/sync/route')
-    const synced = getSyncedData()
-    if (synced && synced.expenses && synced.expenses.length > 0) {
-      return synced.expenses
-    }
-  } catch {
-    // Fallback to static if sync data not available
-  }
-  return staticExpenses
-}
-
-export const mockExpenses = getCurrentExpenses()
