@@ -69,8 +69,29 @@ export async function POST(request: Request) {
     let activeCount = 0
     let totalOneOff = 0
 
+    // Helper to parse CSV line respecting quotes
+    function parseCSVLine(line: string): string[] {
+      const result = []
+      let current = ''
+      let inQuotes = false
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i]
+        if (char === '"') {
+          inQuotes = !inQuotes
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim())
+          current = ''
+        } else {
+          current += char
+        }
+      }
+      result.push(current.trim())
+      return result
+    }
+
     for (let i = 1; i < clientLines.length; i++) {
-      const cols = clientLines[i].split(',').map(c => c.trim().replace(/"/g, ''))
+      const cols = parseCSVLine(clientLines[i])
       if (cols.length < 4) continue
 
       // CSV format: [empty], Client, Status, Monthly Rate, Notes, [empty], One-Off columns...
@@ -99,7 +120,7 @@ export async function POST(request: Request) {
     let totalExpenses = 0
 
     for (let i = 1; i < expenseLines.length; i++) {
-      const cols = expenseLines[i].split(',').map(c => c.trim().replace(/"/g, ''))
+      const cols = parseCSVLine(expenseLines[i])
       if (cols.length < 2) continue
 
       const category = cols[0]
@@ -135,7 +156,7 @@ export async function POST(request: Request) {
 
     // Parse scorecard looking for month + goal columns
     for (let i = 1; i < scorecardLines.length; i++) {
-      const cols = scorecardLines[i].split(',').map(c => c.trim().replace(/"/g, ''))
+      const cols = parseCSVLine(scorecardLines[i])
       if (cols.length < 2) continue
 
       // Look for month name in first column
