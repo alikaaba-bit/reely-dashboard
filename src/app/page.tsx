@@ -3,11 +3,11 @@ import MRRChart from './components/MRRChart'
 import PipelineFunnel from './components/PipelineFunnel'
 import OverheadCard from './components/OverheadCard'
 import ProfitCard from './components/ProfitCard'
-import ScorecardGrid from './components/ScorecardGrid'
 import SyncButton from './components/SyncButton'
 import DashboardActions from './components/DashboardActions'
 import ValuationCard from './components/ValuationCard'
 import MetricsCard from './components/MetricsCard'
+import GoalTrackerCard from './components/GoalTrackerCard'
 import { formatDistanceToNow } from '@/lib/utils'
 
 export default function Dashboard() {
@@ -56,6 +56,11 @@ export default function Dashboard() {
           <MRRChart />
         </div>
 
+        {/* Goal Progress Tracker */}
+        <div className="mb-6">
+          <GoalTrackerCard />
+        </div>
+
         {/* Financial Summary Row - Overhead + Profit */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 card-grid">
           <OverheadCard />
@@ -68,10 +73,9 @@ export default function Dashboard() {
           <MetricsCard />
         </div>
 
-        {/* Middle Row - Pipeline & Scorecard */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 card-grid">
+        {/* Pipeline Section */}
+        <div className="mb-6">
           <PipelineFunnel />
-          <ScorecardGrid />
         </div>
 
         {/* Footer */}

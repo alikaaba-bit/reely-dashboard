@@ -60,6 +60,29 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
 
+  // Monthly goal tracking
+  if (type === 'goal') {
+    const currentMRR = realMRR.mrr
+    const monthlyGoal = 50000 // TODO: Make this configurable via env var or database
+    const gap = monthlyGoal - currentMRR
+    const percentOfGoal = (currentMRR / monthlyGoal) * 100
+
+    let status: 'on-track' | 'at-risk' | 'off-track'
+    if (percentOfGoal >= 95) status = 'on-track'
+    else if (percentOfGoal >= 80) status = 'at-risk'
+    else status = 'off-track'
+
+    return NextResponse.json({
+      currentMRR,
+      monthlyGoal,
+      gap,
+      percentOfGoal,
+      status,
+      month: new Date().toLocaleDateString('en-US', { month: 'long' }),
+      timestamp: new Date().toISOString(),
+    })
+  }
+
   // Valuation data handler
   if (type === 'valuation') {
     const arr = realMRR.mrr * 12
