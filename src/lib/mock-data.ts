@@ -21,13 +21,36 @@ const activeClients = realClients.filter(c => c.status === 'Active')
 const calculatedMRR = activeClients.reduce((sum, client) => sum + client.monthly_rate + client.additional, 0)
 const activeCount = activeClients.length
 
-export const realMRR = {
-  mrr: calculatedMRR,
-  active_clients: activeCount,
-  avg_revenue_per_client: activeCount > 0 ? calculatedMRR / activeCount : 0,
-  new_clients: 0,
-  churned_clients: 0,
+// Function to get current MRR (checks for synced data first)
+export function getCurrentMRR() {
+  try {
+    // Try to import synced data from sync route
+    // This will be populated when the sync button is clicked
+    const { getSyncedData } = require('../app/api/sync/route')
+    const synced = getSyncedData()
+    if (synced) {
+      return {
+        mrr: synced.mrr,
+        active_clients: synced.activeClients,
+        avg_revenue_per_client: synced.activeClients > 0 ? synced.mrr / synced.activeClients : 0,
+        new_clients: 0,
+        churned_clients: 0,
+      }
+    }
+  } catch {
+    // Fallback to calculated values if sync data not available
+  }
+
+  return {
+    mrr: calculatedMRR,
+    active_clients: activeCount,
+    avg_revenue_per_client: activeCount > 0 ? calculatedMRR / activeCount : 0,
+    new_clients: 0,
+    churned_clients: 0,
+  }
 }
+
+export const realMRR = getCurrentMRR()
 
 // One-off project revenue (non-recurring)
 export const oneOffProjects = {

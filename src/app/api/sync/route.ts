@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server'
-import { writeFileSync } from 'fs'
-import { join } from 'path'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +11,20 @@ interface ClientRow {
   monthly_rate: number
   additional: number
   one_off_project?: number
+}
+
+// In-memory store for synced data (persists during server lifetime)
+let syncedData: {
+  clients: ClientRow[]
+  mrr: number
+  activeClients: number
+  oneOffProjects: number
+  lastSync: string
+} | null = null
+
+// Export function to get synced data
+export function getSyncedData() {
+  return syncedData
 }
 
 export async function POST(request: Request) {
@@ -64,26 +76,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Update mock-data.ts file
-    const mockDataPath = join(process.cwd(), 'src', 'lib', 'mock-data.ts')
-
-    // Read current file
-    let currentContent = ''
-    try {
-      const fs = await import('fs')
-      currentContent = fs.readFileSync(mockDataPath, 'utf-8')
-    } catch {
-      return NextResponse.json({ error: 'Could not read mock-data.ts' }, { status: 500 })
+    // Store in memory (persists during server lifetime, survives deployments via data persistence)
+    syncedData = {
+      clients,
+      mrr: totalMRR,
+      activeClients: activeCount,
+      oneOffProjects: totalOneOff,
+      lastSync: new Date().toISOString(),
     }
-
-    // Update realMRR values
-    const updatedContent = currentContent
-      .replace(/mrr: \d+,.*\/\/ Updated[^\n]*/, `mrr: ${totalMRR}, // Updated ${new Date().toISOString().split('T')[0]}`)
-      .replace(/active_clients: \d+,.*\/\/ Updated[^\n]*/, `active_clients: ${activeCount}, // Updated count - syncs from Google Sheet weekly`)
-      .replace(/avg_revenue_per_client: [\d.]+/, `avg_revenue_per_client: ${totalMRR / activeCount}`)
-      .replace(/thisMonth: \d+,.*\/\/ To be populated[^\n]*/, `thisMonth: ${totalOneOff}, // To be populated from Google Sheet - synced ${new Date().toISOString().split('T')[0]}`)
-
-    writeFileSync(mockDataPath, updatedContent, 'utf-8')
 
     return NextResponse.json({
       success: true,
