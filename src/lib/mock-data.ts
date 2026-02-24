@@ -185,10 +185,12 @@ export const mockScorecardData = {
   timestamp: new Date().toISOString(),
 }
 
-// Expenses breakdown (from Excel data)
+// Expenses breakdown (from Google Sheet: Reely Master Scorecard 2026)
+// Source: https://docs.google.com/spreadsheets/d/1GIDvoOpWFFAeLljQ_2XiJk92r1F-907_/edit (Expenses tab)
+// Last updated: Feb 2026
 export const mockExpenses = [
-  { category: 'Labour', amount: 10565 },
-  { category: 'Software & Tools', amount: 500 },
-  { category: 'Marketing', amount: 2500 },
-  { category: 'Overheads', amount: 1500 },
+  { category: 'Payroll', amount: 14718 },
+  { category: 'Software & Marketing', amount: 5609 },
+  { category: 'Office & Facilities', amount: 186 },
+  { category: 'Bank & Accounting', amount: 153 },
 ]
