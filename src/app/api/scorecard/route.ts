@@ -63,13 +63,24 @@ export async function GET(request: Request) {
   // Valuation data handler
   if (type === 'valuation') {
     const arr = realMRR.mrr * 12
+    const expenses = mockExpenses.reduce((s, e) => s + e.amount, 0)
+    const monthlyEbitda = realMRR.mrr - expenses
+    const annualEbitda = monthlyEbitda * 12
+    const ebitdaMargin = realMRR.mrr > 0 ? (monthlyEbitda / realMRR.mrr) * 100 : 0
+
+    // Agency valuations use EBITDA multiples (not ARR like SaaS)
+    // Typical range: 3-6x EBITDA
+    // High-performing agencies (>20% margins, recurring revenue): 6-8x
+    // Premium (tech-enabled, >40% margins): 7-10x
     return NextResponse.json({
       mrr: realMRR.mrr,
       arr,
+      ebitda: annualEbitda,
+      ebitdaMargin,
       valuations: {
-        conservative: arr * 4,
-        market: arr * 5,
-        aggressive: arr * 6,
+        conservative: Math.round(annualEbitda * 4),   // 4x EBITDA - lower end for agencies
+        market: Math.round(annualEbitda * 5.5),       // 5.5x EBITDA - market rate for recurring agencies
+        premium: Math.round(annualEbitda * 7),        // 7x EBITDA - high-margin, recurring revenue
       },
       timestamp: new Date().toISOString(),
     })

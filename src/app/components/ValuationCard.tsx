@@ -8,10 +8,12 @@ import { formatCurrency } from '@/lib/utils'
 interface ValuationData {
   mrr: number
   arr: number
+  ebitda: number
+  ebitdaMargin: number
   valuations: {
-    conservative: number  // 4x ARR
-    market: number        // 5x ARR
-    aggressive: number    // 6x ARR
+    conservative: number  // 4x EBITDA
+    market: number        // 5.5x EBITDA
+    premium: number       // 7x EBITDA
   }
 }
 
@@ -35,7 +37,9 @@ export default function ValuationCard() {
   }
 
   const arr = data?.arr || 0
-  const valuations = data?.valuations || { conservative: 0, market: 0, aggressive: 0 }
+  const ebitda = data?.ebitda || 0
+  const margin = data?.ebitdaMargin || 0
+  const valuations = data?.valuations || { conservative: 0, market: 0, premium: 0 }
 
   return (
     <motion.div
@@ -52,46 +56,47 @@ export default function ValuationCard() {
           </div>
           <div>
             <h3 className="font-semibold text-[#F8FAFC]">Company Valuation</h3>
-            <p className="text-xs text-[#64748B]">SaaS Multiple Estimates</p>
+            <p className="text-xs text-[#64748B]">Agency EBITDA Multiples</p>
           </div>
         </div>
       </div>
 
-      {/* ARR */}
+      {/* EBITDA */}
       <div className="mb-6">
-        <p className="text-sm text-[#64748B] mb-1">Annual Recurring Revenue</p>
-        <p className="text-3xl font-bold text-white tracking-tight">{formatCurrency(arr)}</p>
+        <p className="text-sm text-[#64748B] mb-1">Annual EBITDA (Profit)</p>
+        <p className="text-3xl font-bold text-white tracking-tight">{formatCurrency(ebitda)}</p>
+        <p className="text-xs text-emerald-400 mt-1">{margin.toFixed(1)}% margin · ARR {formatCurrency(arr)}</p>
       </div>
 
       {/* Valuation Estimates */}
       <div className="space-y-3">
         <div className="flex items-center justify-between p-3 bg-[#1E293B]/50 rounded-xl border border-[#334155]/30">
           <div>
-            <p className="text-xs text-[#64748B]">Conservative (4× ARR)</p>
+            <p className="text-xs text-[#64748B]">Conservative (4× EBITDA)</p>
             <p className="text-lg font-bold text-emerald-400">{formatCurrency(valuations.conservative)}</p>
           </div>
-          <div className="text-xs text-[#64748B]">Low risk</div>
+          <div className="text-xs text-[#64748B]">Typical agency</div>
         </div>
 
         <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl border border-blue-500/30">
           <div>
-            <p className="text-xs text-[#94A3B8]">Market (5× ARR)</p>
+            <p className="text-xs text-[#94A3B8]">Market (5.5× EBITDA)</p>
             <p className="text-xl font-bold text-blue-400">{formatCurrency(valuations.market)}</p>
           </div>
-          <div className="text-xs text-[#94A3B8]">Industry avg</div>
+          <div className="text-xs text-[#94A3B8]">Recurring rev</div>
         </div>
 
         <div className="flex items-center justify-between p-3 bg-[#1E293B]/50 rounded-xl border border-[#334155]/30">
           <div>
-            <p className="text-xs text-[#64748B]">Aggressive (6× ARR)</p>
-            <p className="text-lg font-bold text-amber-400">{formatCurrency(valuations.aggressive)}</p>
+            <p className="text-xs text-[#64748B]">Premium (7× EBITDA)</p>
+            <p className="text-lg font-bold text-amber-400">{formatCurrency(valuations.premium)}</p>
           </div>
-          <div className="text-xs text-[#64748B]">High growth</div>
+          <div className="text-xs text-[#64748B]">High margin</div>
         </div>
       </div>
 
       <p className="text-xs text-[#475569] mt-4 border-t border-[#334155]/20 pt-3">
-        Valuations based on standard SaaS/agency multiples. Actual value depends on growth, churn, and market conditions.
+        Agency valuations based on EBITDA multiples (3-7x). Premium multiple applies to agencies with {'>'}40% margins and recurring revenue.
       </p>
     </motion.div>
   )
