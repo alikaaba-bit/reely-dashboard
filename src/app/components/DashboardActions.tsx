@@ -10,10 +10,11 @@ export default function DashboardActions() {
     // Generate CSV with current data
     const data = [
       ['Metric', 'Value'],
-      ['Cash Balance', '$98,420'],
+      ['Cash Balance', '$42,417'],
       ['MRR', '$33,842'],
       ['Active Clients', '11'],
-      ['Monthly Burn', '$15,565'],
+      ['Monthly Profit', '$13,176'],
+      ['Total Expenses', '$20,666'],
       ['Pipeline Value', '$136,000'],
     ]
     
