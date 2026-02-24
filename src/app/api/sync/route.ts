@@ -71,15 +71,16 @@ export async function POST(request: Request) {
 
     for (let i = 1; i < clientLines.length; i++) {
       const cols = clientLines[i].split(',').map(c => c.trim().replace(/"/g, ''))
-      if (cols.length < 3) continue
+      if (cols.length < 4) continue
 
-      const company = cols[0]
-      const status = cols[1] || 'Active'
-      const monthlyRate = parseFloat(cols[2]?.replace(/[$,]/g, '') || '0')
-      const additional = parseFloat(cols[3]?.replace(/[$,]/g, '') || '0')
-      const oneOff = parseFloat(cols[4]?.replace(/[$,]/g, '') || '0')
+      // CSV format: [empty], Client, Status, Monthly Rate, Notes, [empty], One-Off columns...
+      const company = cols[1] // Column B
+      const status = cols[2] || 'Active' // Column C
+      const monthlyRate = parseFloat(cols[3]?.replace(/[$,]/g, '') || '0') // Column D
+      const additional = 0 // No additional column in this sheet
+      const oneOff = parseFloat(cols[9]?.replace(/[$,]/g, '') || '0') // Column J (one-off amount)
 
-      if (!company || company.toLowerCase().includes('total')) continue
+      if (!company || company.toLowerCase().includes('total') || company.toLowerCase().includes('client')) continue
 
       clients.push({ company, status, monthly_rate: monthlyRate, additional, one_off_project: oneOff })
 
