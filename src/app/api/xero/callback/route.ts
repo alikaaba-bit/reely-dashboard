@@ -54,8 +54,8 @@ export async function GET(request: Request) {
       expires_in: tokenData.expires_in,
     })
 
-    // Build absolute redirect URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
+    // Build absolute redirect URL - hardcode production URL to avoid localhost issues
+    const baseUrl = 'https://reely-dashboard-production-6bcc.up.railway.app'
     const redirectUrl = `${baseUrl}/?xero=connected`
     console.log('Xero OAuth: Redirecting to:', redirectUrl)
 
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(redirectUrl)
   } catch (err) {
     console.error('Xero OAuth callback error:', err)
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
+    const baseUrl = 'https://reely-dashboard-production-6bcc.up.railway.app'
     return NextResponse.redirect(`${baseUrl}/?xero=error`)
   }
 }

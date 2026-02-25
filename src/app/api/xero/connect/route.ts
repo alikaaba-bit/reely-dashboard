@@ -4,11 +4,14 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const clientId = process.env.XERO_CLIENT_ID
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/xero/callback`
+  // Hardcode production URL to avoid any localhost issues
+  const redirectUri = 'https://reely-dashboard-production-6bcc.up.railway.app/api/xero/callback'
 
   if (!clientId) {
     return NextResponse.json({ error: 'XERO_CLIENT_ID not configured' }, { status: 500 })
   }
+
+  console.log('Xero OAuth: Initiating with redirect_uri:', redirectUri)
 
   // Xero OAuth 2.0 authorization URL
   const authUrl = new URL('https://login.xero.com/identity/connect/authorize')
