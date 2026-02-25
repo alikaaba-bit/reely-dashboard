@@ -21,6 +21,9 @@ export async function GET(request: Request) {
   }
 
   try {
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/xero/callback`
+    console.log('Xero OAuth: Exchanging code for token with redirect_uri:', redirectUri)
+
     // Exchange authorization code for access token
     const tokenResponse = await fetch('https://identity.xero.com/connect/token', {
       method: 'POST',
@@ -31,7 +34,7 @@ export async function GET(request: Request) {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/xero/callback`,
+        redirect_uri: redirectUri,
       }).toString(),
     })
 
@@ -51,10 +54,16 @@ export async function GET(request: Request) {
       expires_in: tokenData.expires_in,
     })
 
+    // Build absolute redirect URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
+    const redirectUrl = `${baseUrl}/?xero=connected`
+    console.log('Xero OAuth: Redirecting to:', redirectUrl)
+
     // Redirect back to dashboard with success message
-    return NextResponse.redirect(new URL('/?xero=connected', request.url))
+    return NextResponse.redirect(redirectUrl)
   } catch (err) {
     console.error('Xero OAuth callback error:', err)
-    return NextResponse.redirect(new URL('/?xero=error', request.url))
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
+    return NextResponse.redirect(`${baseUrl}/?xero=error`)
   }
 }
