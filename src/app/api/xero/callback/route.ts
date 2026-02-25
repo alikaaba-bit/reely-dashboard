@@ -55,15 +55,16 @@ export async function GET(request: Request) {
     })
 
     // Build absolute redirect URL - hardcode production URL to avoid localhost issues
-    const baseUrl = 'https://reely-dashboard-production-6bcc.up.railway.app'
-    const redirectUrl = `${baseUrl}/?xero=connected`
-    console.log('Xero OAuth: Redirecting to:', redirectUrl)
+    const redirectUrl = new URL('/?xero=connected', 'https://reely-dashboard-production-6bcc.up.railway.app')
+    console.log('Xero OAuth: Redirecting to:', redirectUrl.toString())
 
-    // Redirect back to dashboard with success message
-    return NextResponse.redirect(redirectUrl)
+    // Redirect back to dashboard with success message using absolute URL
+    const response = NextResponse.redirect(redirectUrl, 302)
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    return response
   } catch (err) {
     console.error('Xero OAuth callback error:', err)
-    const baseUrl = 'https://reely-dashboard-production-6bcc.up.railway.app'
-    return NextResponse.redirect(`${baseUrl}/?xero=error`)
+    const errorUrl = new URL('/?xero=error', 'https://reely-dashboard-production-6bcc.up.railway.app')
+    return NextResponse.redirect(errorUrl, 302)
   }
 }
