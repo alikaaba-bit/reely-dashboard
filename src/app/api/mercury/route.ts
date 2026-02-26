@@ -1,14 +1,33 @@
 import { NextResponse } from 'next/server'
 import { getAllAccountsWithHighbeam, getBalanceHistory } from '@/lib/mercury'
 import { mockMercuryData } from '@/lib/mock-data'
+import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  const highbeamBalance = parseFloat(process.env.HIGHBEAM_BALANCE || '49498.53')
+async function getHighbeamBalance(): Promise<number> {
+  // Try Supabase first, fall back to env var
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    )
+    const { data } = await supabase
+      .from('manual_balances')
+      .select('balance')
+      .eq('account_name', 'Highbeam')
+      .single()
 
-  // Use direct bank APIs — Mercury API for Mercury, env var for Highbeam
-  // (Xero only has reconciled accounting balances, not live bank balances)
+    if (data?.balance) return parseFloat(data.balance)
+  } catch {
+    // fall through
+  }
+  return parseFloat(process.env.HIGHBEAM_BALANCE || '49498.53')
+}
+
+export async function GET() {
+  const highbeamBalance = await getHighbeamBalance()
+
   const hasMercuryKey = process.env.MERCURY_API_KEY &&
     !process.env.MERCURY_API_KEY.includes('placeholder')
 
@@ -30,6 +49,13 @@ export async function GET() {
 
   try {
     const accounts = await getAllAccountsWithHighbeam()
+    // Override Highbeam balance with Supabase value
+    for (const acc of accounts) {
+      if (acc.type === 'highbeam') {
+        acc.balance = highbeamBalance
+        acc.name = 'Highbeam'
+      }
+    }
     const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0)
 
     let history = mockMercuryData.history

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatCurrency } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Wallet, ArrowUpRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, Pencil, Check, X } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 interface AccountSummary {
@@ -29,8 +29,11 @@ export default function CashCard() {
   const [data, setData] = useState<CashData | null>(null)
   const [profitData, setProfitData] = useState<ProfitData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
+  const fetchData = () => {
     Promise.all([
       fetch('/api/mercury').then(res => res.json()),
       fetch('/api/scorecard?type=profit').then(res => res.json())
@@ -41,7 +44,36 @@ export default function CashCard() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { fetchData() }, [])
+
+  const handleEdit = (acc: AccountSummary) => {
+    setEditing(acc.name)
+    setEditValue(acc.balance.toString())
+  }
+
+  const handleSave = async () => {
+    if (!editing || !editValue) return
+    setSaving(true)
+    try {
+      await fetch('/api/balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_name: editing, balance: parseFloat(editValue) }),
+      })
+      setEditing(null)
+      fetchData()
+    } catch (err) {
+      console.error('Save failed:', err)
+    }
+    setSaving(false)
+  }
+
+  const handleCancel = () => {
+    setEditing(null)
+    setEditValue('')
+  }
 
   if (loading) {
     return (
@@ -55,11 +87,7 @@ export default function CashCard() {
   const accounts = data?.accounts || []
   const history = data?.history || []
 
-  // Use actual monthly profit for burn rate (negative = burning, positive = profit)
   const monthlyProfit = profitData?.netProfit || 0
-  const monthlyBurnRate = -monthlyProfit // Negative profit means burning cash
-
-  // Calculate runway: if burning (negative profit), divide cash by burn rate
   const runway = monthlyProfit < 0 ? Math.floor(totalBalance / Math.abs(monthlyProfit)) : Infinity
 
   const lastWeekBalance = history.length > 7 ? history[history.length - 8].balance : totalBalance
@@ -130,7 +158,47 @@ export default function CashCard() {
                     {acc.type === 'mercury' ? 'Mercury' : 'Highbeam'}
                   </span>
                 </div>
-                <span className="text-sm font-semibold text-white">{formatCurrency(acc.balance)}</span>
+                <div className="flex items-center gap-2">
+                  {editing === acc.name ? (
+                    <>
+                      <span className="text-sm text-[#64748B]">$</span>
+                      <input
+                        type="number"
+                        value={editValue}
+                        onChange={e => setEditValue(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSave()}
+                        className="w-28 bg-[#0F172A] border border-[#334155] rounded px-2 py-1 text-sm text-white text-right focus:outline-none focus:border-blue-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="p-1 text-emerald-400 hover:text-emerald-300 transition-colors"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={handleCancel}
+                        className="p-1 text-[#64748B] hover:text-red-400 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm font-semibold text-white">{formatCurrency(acc.balance)}</span>
+                      {acc.type === 'highbeam' && (
+                        <button
+                          onClick={() => handleEdit(acc)}
+                          className="p-1 text-[#475569] hover:text-amber-400 transition-colors"
+                          title="Update balance"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </motion.div>
             ))}
           </div>
