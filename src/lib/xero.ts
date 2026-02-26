@@ -272,6 +272,7 @@ export async function getBankBalances(): Promise<{
 
 /**
  * Parse the BankSummary report structure
+ * Columns: [0] Account Name, [1] Opening Balance, [2] Cash Received, [3] Cash Spent, [4] Closing Balance
  */
 function parseBankSummary(data: Record<string, unknown>): { name: string; balance: number; accountId: string }[] {
   const accounts: { name: string; balance: number; accountId: string }[] = []
@@ -285,7 +286,8 @@ function parseBankSummary(data: Record<string, unknown>): { name: string; balanc
       for (const row of section.Rows) {
         if (row.RowType === 'Row' && row.Cells) {
           const name = row.Cells[0]?.Value || 'Unknown'
-          const balance = parseFloat(row.Cells[1]?.Value || '0')
+          // Column 4 = Closing Balance (not column 1 which is Opening Balance)
+          const balance = parseFloat(row.Cells[4]?.Value || row.Cells[1]?.Value || '0')
           const accountId = row.Cells[0]?.Attributes?.[0]?.Value || ''
           if (name && !isNaN(balance)) {
             accounts.push({ name, balance, accountId })
