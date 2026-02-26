@@ -1,65 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getAllAccountsWithHighbeam, getBalanceHistory } from '@/lib/mercury'
-import { getBankBalances, isXeroConnected } from '@/lib/xero'
 import { mockMercuryData } from '@/lib/mock-data'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const highbeamBalance = parseFloat(process.env.HIGHBEAM_BALANCE || '29074.35')
+  const highbeamBalance = parseFloat(process.env.HIGHBEAM_BALANCE || '49498.53')
 
-  // Try Xero first for both Mercury and Highbeam balances
-  try {
-    const xeroConnected = await isXeroConnected()
-    if (xeroConnected) {
-      const xeroData = await getBankBalances()
-      if (xeroData.accounts.length > 0) {
-        // Map Xero bank accounts to our format
-        const accounts = xeroData.accounts.map(acc => {
-          const nameLower = acc.name.toLowerCase()
-          const type = nameLower.includes('mercury') ? 'mercury' as const
-            : nameLower.includes('highbeam') ? 'highbeam' as const
-            : 'mercury' as const // Default to mercury for unknown bank accounts
-          return {
-            name: acc.name,
-            balance: acc.balance,
-            type,
-          }
-        })
-
-        const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
-
-        // Try to get balance history from Mercury API for sparkline
-        let history = mockMercuryData.history
-        const hasMercuryKey = process.env.MERCURY_API_KEY &&
-          !process.env.MERCURY_API_KEY.includes('placeholder')
-        if (hasMercuryKey) {
-          try {
-            const mercuryAccounts = await getAllAccountsWithHighbeam()
-            const mercuryHistory = await getBalanceHistory(mercuryAccounts, 30)
-            if (mercuryHistory.length > 0) {
-              history = mercuryHistory
-            }
-          } catch (histErr) {
-            console.error('Mercury history fetch error:', histErr)
-          }
-        }
-
-        return NextResponse.json({
-          accounts,
-          totalBalance,
-          balance: totalBalance,
-          history,
-          source: 'xero',
-          timestamp: new Date().toISOString(),
-        })
-      }
-    }
-  } catch (xeroErr) {
-    console.error('Xero bank balance fetch failed, falling back to Mercury:', xeroErr)
-  }
-
-  // Fallback: Mercury API + Highbeam env var
+  // Use direct bank APIs — Mercury API for Mercury, env var for Highbeam
+  // (Xero only has reconciled accounting balances, not live bank balances)
   const hasMercuryKey = process.env.MERCURY_API_KEY &&
     !process.env.MERCURY_API_KEY.includes('placeholder')
 
@@ -101,7 +50,7 @@ export async function GET() {
       totalBalance,
       balance: totalBalance,
       history,
-      source: 'mercury',
+      source: 'mercury+highbeam',
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
