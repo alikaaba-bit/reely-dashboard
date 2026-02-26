@@ -1,28 +1,26 @@
 import { NextResponse } from 'next/server'
+import { storeTokens, fetchTenantId } from '@/lib/xero'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
-  const state = searchParams.get('state')
   const error = searchParams.get('error')
 
-  // Handle OAuth error
   if (error) {
     console.error('Xero OAuth error:', error)
-    return NextResponse.redirect(new URL('/?xero=error', request.url))
+    return NextResponse.redirect(new URL('/?xero=error', 'https://reely-dashboard-production-6bcc.up.railway.app'))
   }
 
-  // Handle missing code
   if (!code) {
     console.error('No authorization code received from Xero')
-    return NextResponse.redirect(new URL('/?xero=missing-code', request.url))
+    return NextResponse.redirect(new URL('/?xero=missing-code', 'https://reely-dashboard-production-6bcc.up.railway.app'))
   }
 
   try {
     const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/xero/callback`
-    console.log('Xero OAuth: Exchanging code for token with redirect_uri:', redirectUri)
+    console.log('Xero OAuth: Exchanging code for token')
 
     // Exchange authorization code for access token
     const tokenResponse = await fetch('https://identity.xero.com/connect/token', {
@@ -41,30 +39,37 @@ export async function GET(request: Request) {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text()
       console.error('Xero token exchange failed:', errorData)
-      return NextResponse.redirect(new URL('/?xero=token-error', request.url))
+      return NextResponse.redirect(new URL('/?xero=token-error', 'https://reely-dashboard-production-6bcc.up.railway.app'))
     }
 
     const tokenData = await tokenResponse.json()
+    console.log('Xero OAuth: Token received, fetching tenant ID...')
 
-    // TODO: Store tokens securely (use Supabase or encrypted session storage)
-    // For now, we'll just log success
-    console.log('Xero OAuth successful, received tokens:', {
-      access_token: tokenData.access_token ? 'present' : 'missing',
-      refresh_token: tokenData.refresh_token ? 'present' : 'missing',
-      expires_in: tokenData.expires_in,
-    })
+    // Fetch the connected organization's tenant ID
+    const tenantId = await fetchTenantId(tokenData.access_token)
+    console.log('Xero OAuth: Tenant ID:', tenantId)
 
-    // Build absolute redirect URL - hardcode production URL to avoid localhost issues
-    const redirectUrl = new URL('/?xero=connected', 'https://reely-dashboard-production-6bcc.up.railway.app')
-    console.log('Xero OAuth: Redirecting to:', redirectUrl.toString())
+    // Store tokens + tenant ID in Supabase
+    await storeTokens(
+      tokenData.access_token,
+      tokenData.refresh_token,
+      tokenData.expires_in,
+      tenantId
+    )
 
-    // Redirect back to dashboard with success message using absolute URL
-    const response = NextResponse.redirect(redirectUrl, 302)
+    console.log('Xero OAuth: Tokens stored successfully')
+
+    const response = NextResponse.redirect(
+      new URL('/?xero=connected', 'https://reely-dashboard-production-6bcc.up.railway.app'),
+      302
+    )
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
     return response
   } catch (err) {
     console.error('Xero OAuth callback error:', err)
-    const errorUrl = new URL('/?xero=error', 'https://reely-dashboard-production-6bcc.up.railway.app')
-    return NextResponse.redirect(errorUrl, 302)
+    return NextResponse.redirect(
+      new URL('/?xero=error', 'https://reely-dashboard-production-6bcc.up.railway.app'),
+      302
+    )
   }
 }

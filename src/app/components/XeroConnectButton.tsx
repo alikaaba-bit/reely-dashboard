@@ -8,37 +8,31 @@ export default function XeroConnectButton() {
   const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    // Check localStorage for persisted connection state
-    const stored = localStorage.getItem('xero_connected')
-    if (stored === 'true') {
-      setIsConnected(true)
-      setIsChecking(false)
-      return
-    }
-
-    // Check URL params for connection status
+    // Check URL params first for fresh OAuth redirect
     const params = new URLSearchParams(window.location.search)
     const xeroStatus = params.get('xero')
 
     if (xeroStatus === 'connected') {
       setIsConnected(true)
-      localStorage.setItem('xero_connected', 'true')
-      // Clean up URL
+      setIsChecking(false)
       window.history.replaceState({}, '', window.location.pathname)
+      return
     } else if (xeroStatus === 'error' || xeroStatus === 'token-error') {
       alert('Xero connection failed. Please try again.')
     }
 
-    setIsChecking(false)
+    // Check server for real connection state (tokens in DB)
+    fetch('/api/xero/status')
+      .then(res => res.json())
+      .then(data => {
+        setIsConnected(data.connected)
+        setIsChecking(false)
+      })
+      .catch(() => setIsChecking(false))
   }, [])
 
   const handleConnect = () => {
     window.location.href = '/api/xero/connect'
-  }
-
-  const handleDisconnect = () => {
-    localStorage.removeItem('xero_connected')
-    setIsConnected(false)
   }
 
   if (isChecking) {
@@ -58,11 +52,11 @@ export default function XeroConnectButton() {
           Xero Connected
         </div>
         <button
-          onClick={handleDisconnect}
-          className="px-2 py-1.5 text-xs text-[#64748B] hover:text-red-400 transition-colors"
-          title="Disconnect Xero"
+          onClick={handleConnect}
+          className="px-2 py-1.5 text-xs text-[#64748B] hover:text-blue-400 transition-colors"
+          title="Reconnect Xero"
         >
-          ✕
+          Reconnect
         </button>
       </div>
     )
