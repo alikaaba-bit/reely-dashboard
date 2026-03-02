@@ -1,46 +1,43 @@
 // REAL DATA from Reely Excel file
 // Source: /Users/ali/.openclaw/media/inbound/file_23---4d58603b-e29a-4a31-b0a7-8ae4bf36414d.xlsx
 
-// Real MRR from Clients tab
+// Fallback client data — overridden by Google Sheet sync when available
 export const realClients = [
-  { company: 'Body Restore', status: 'Active', monthly_rate: 3499, additional: 0 },
-  { company: 'People Finders', status: 'Active', monthly_rate: 1999, additional: 0 },
   { company: 'Koi', status: 'Active', monthly_rate: 5499, additional: 0 },
   { company: 'Brandon Agency', status: 'Active', monthly_rate: 3499, additional: 0 },
-  { company: 'Kalm', status: 'Active', monthly_rate: 1999, additional: 0 },
-  { company: 'Curve Communications', status: 'Active', monthly_rate: 1800, additional: 0 },
+  { company: 'Body Restore', status: 'Active', monthly_rate: 3499, additional: 0 },
   { company: '51 Labs', status: 'Active', monthly_rate: 3499, additional: 0 },
+  { company: 'P3 Media', status: 'Active', monthly_rate: 3499, additional: 0 },
   { company: 'Freshly Pressed', status: 'Active', monthly_rate: 3350, additional: 0 },
-  { company: 'Good Moose', status: 'Active', monthly_rate: 1999, additional: 0 },
   { company: 'Hydra Fab', status: 'Active', monthly_rate: 3200, additional: 0 },
-  { company: 'Infinite Agency', status: 'Active', monthly_rate: 3499, additional: 0 },
+  { company: 'Infinite Agency', status: 'Active', monthly_rate: 2499, additional: 0 },
+  { company: 'Bright Shiny Things', status: 'Active', monthly_rate: 2499, additional: 0 },
+  { company: 'People Finders', status: 'Active', monthly_rate: 1999, additional: 0 },
+  { company: 'Kalm', status: 'Active', monthly_rate: 1999, additional: 0 },
+  { company: 'Good Moose', status: 'Active', monthly_rate: 1999, additional: 0 },
+  { company: 'Curve Communications', status: 'Active', monthly_rate: 1800, additional: 0 },
 ]
 
 // Calculate real MRR totals
 const activeClients = realClients.filter(c => c.status === 'Active')
+const totalMRR = activeClients.reduce((sum, c) => sum + c.monthly_rate, 0)
 export const realMRR = {
-  mrr: 36342, // Updated Feb 2026 - includes latest client additions
-  active_clients: 12, // Updated count - syncs from Google Sheet weekly
-  avg_revenue_per_client: 36342 / 12,
+  mrr: totalMRR, // Calculated from client list — $38,840 as of Mar 2026
+  active_clients: activeClients.length,
+  avg_revenue_per_client: totalMRR / activeClients.length,
   new_clients: 0,
   churned_clients: 0,
 }
 
-// One-off project revenue (non-recurring)
-export const oneOffProjects = {
-  thisMonth: 0, // To be populated from Google Sheet - syncs weekly
-  lastMonth: 0,
-  ytd: 0,
-}
-
-// Mock history based on real MRR trajectory (estimated)
+// MRR history trajectory
 export const mockMrrHistory = [
   { date: '2025-09-01', mrr: 28000, active_clients: 9 },
   { date: '2025-10-01', mrr: 29500, active_clients: 9 },
   { date: '2025-11-01', mrr: 31000, active_clients: 10 },
   { date: '2025-12-01', mrr: 32500, active_clients: 10 },
   { date: '2026-01-01', mrr: 33842, active_clients: 11 },
-  { date: '2026-02-01', mrr: 36342, active_clients: 11 },
+  { date: '2026-02-01', mrr: 36342, active_clients: 12 },
+  { date: '2026-03-01', mrr: 38840, active_clients: 13 },
 ]
 
 // Mock Mercury data (placeholder until real API connected)

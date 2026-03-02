@@ -12,7 +12,13 @@ interface ClientRow {
   status: string
   monthly_rate: number
   additional: number
-  one_off_project?: number
+}
+
+interface OneOffProject {
+  month: string
+  client: string
+  project: string
+  amount: number
 }
 
 interface ExpenseRow {
@@ -30,7 +36,8 @@ let syncedData: {
   clients: ClientRow[]
   mrr: number
   activeClients: number
-  oneOffProjects: number
+  oneOffProjects: OneOffProject[]
+  oneOffTotal: number
   expenses: ExpenseRow[]
   totalExpenses: number
   monthlyGoals: MonthlyGoal[]
@@ -40,6 +47,40 @@ let syncedData: {
 // Export function to get synced data
 export function getSyncedData() {
   return syncedData
+}
+
+// Helper to parse CSV line respecting quotes
+function parseCSVLine(line: string): string[] {
+  const result = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === '"') {
+      inQuotes = !inQuotes
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  result.push(current.trim())
+  return result
+}
+
+// Check if a string looks like a real client name (not a header, number, or summary)
+function isValidClientName(name: string): boolean {
+  if (!name) return false
+  const lower = name.toLowerCase()
+  if (lower.includes('total')) return false
+  if (lower === 'client') return false
+  if (lower.includes('active clients')) return false
+  if (lower.includes('reely')) return false
+  // Skip purely numeric values (summary row counts like "12")
+  if (/^\d+$/.test(name)) return false
+  return true
 }
 
 export async function POST(request: Request) {
@@ -61,54 +102,58 @@ export async function POST(request: Request) {
     }
 
     // Parse Clients Tab
+    // CSV layout:
+    //   Col A (0): empty | Col B (1): Client | Col C (2): Status | Col D (3): Monthly Rate | Col E (4): Notes
+    //   Col F (5): empty | Col G (6): Month   | Col H (7): Client | Col I (8): Project     | Col J (9): Amount
+    // The left side (B-E) is the client roster; the right side (G-J) is one-off projects (independent rows)
     const clientsCsv = await clientsRes.text()
     const clientLines = clientsCsv.trim().split('\n')
 
     const clients: ClientRow[] = []
+    const oneOffProjects: OneOffProject[] = []
     let totalMRR = 0
     let activeCount = 0
     let totalOneOff = 0
 
-    // Helper to parse CSV line respecting quotes
-    function parseCSVLine(line: string): string[] {
-      const result = []
-      let current = ''
-      let inQuotes = false
-
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i]
-        if (char === '"') {
-          inQuotes = !inQuotes
-        } else if (char === ',' && !inQuotes) {
-          result.push(current.trim())
-          current = ''
-        } else {
-          current += char
-        }
+    // Find the header row for clients (contains "Client" in col B and "Status" in col C)
+    let clientDataStartRow = -1
+    for (let i = 0; i < clientLines.length; i++) {
+      const cols = parseCSVLine(clientLines[i])
+      if (cols[1]?.toLowerCase() === 'client' && cols[2]?.toLowerCase() === 'status') {
+        clientDataStartRow = i + 1
+        break
       }
-      result.push(current.trim())
-      return result
     }
 
-    for (let i = 1; i < clientLines.length; i++) {
+    if (clientDataStartRow === -1) clientDataStartRow = 1 // fallback
+
+    for (let i = clientDataStartRow; i < clientLines.length; i++) {
       const cols = parseCSVLine(clientLines[i])
       if (cols.length < 4) continue
 
-      // CSV format: [empty], Client, Status, Monthly Rate, Notes, [empty], One-Off columns...
-      const company = cols[1] // Column B
-      const status = cols[2] || 'Active' // Column C
-      const monthlyRate = parseFloat(cols[3]?.replace(/[$,]/g, '') || '0') // Column D
-      const additional = 0 // No additional column in this sheet
-      const oneOff = parseFloat(cols[9]?.replace(/[$,]/g, '') || '0') // Column J (one-off amount)
+      // Parse client from left side (cols B-E)
+      const company = cols[1]
+      const status = cols[2] || ''
+      const monthlyRate = parseFloat(cols[3]?.replace(/[$,]/g, '') || '0')
 
-      if (!company || company.toLowerCase().includes('total') || company.toLowerCase().includes('client')) continue
+      if (isValidClientName(company) && status) {
+        clients.push({ company, status, monthly_rate: monthlyRate, additional: 0 })
 
-      clients.push({ company, status, monthly_rate: monthlyRate, additional, one_off_project: oneOff })
+        if (status.toLowerCase() === 'active') {
+          totalMRR += monthlyRate
+          activeCount++
+        }
+      }
 
-      if (status.toLowerCase() === 'active') {
-        totalMRR += monthlyRate + additional
-        activeCount++
-        totalOneOff += oneOff || 0
+      // Parse one-off project from right side (cols G-J) — independent of left side
+      const oneOffMonth = cols[6] || ''
+      const oneOffClient = cols[7] || ''
+      const oneOffProject = cols[8] || ''
+      const oneOffAmount = parseFloat(cols[9]?.replace(/[$,]/g, '') || '0')
+
+      if (oneOffMonth && oneOffAmount > 0 && !oneOffMonth.toLowerCase().includes('total') && !oneOffMonth.toLowerCase().includes('month')) {
+        oneOffProjects.push({ month: oneOffMonth, client: oneOffClient, project: oneOffProject, amount: oneOffAmount })
+        totalOneOff += oneOffAmount
       }
     }
 
@@ -183,7 +228,8 @@ export async function POST(request: Request) {
       clients,
       mrr: totalMRR,
       activeClients: activeCount,
-      oneOffProjects: totalOneOff,
+      oneOffProjects,
+      oneOffTotal: totalOneOff,
       expenses,
       totalExpenses,
       monthlyGoals,
@@ -194,12 +240,15 @@ export async function POST(request: Request) {
       success: true,
       synced_at: new Date().toISOString(),
       clients: activeCount,
+      total_clients: clients.length,
       mrr: totalMRR,
-      one_off_projects: totalOneOff,
+      one_off_projects: oneOffProjects.length,
+      one_off_total: totalOneOff,
       expenses: expenses.length,
       total_expenses: totalExpenses,
       monthly_goals: monthlyGoals.length,
-      message: `Synced ${clients.length} clients (${activeCount} active), ${expenses.length} expenses, ${monthlyGoals.length} monthly goals`,
+      client_list: clients.map(c => `${c.company} (${c.status}) — $${c.monthly_rate}`),
+      message: `Synced ${clients.length} clients (${activeCount} active, MRR $${totalMRR.toLocaleString()}), ${oneOffProjects.length} one-off projects ($${totalOneOff.toLocaleString()}), ${expenses.length} expenses`,
     })
   } catch (error) {
     return NextResponse.json({

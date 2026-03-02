@@ -1,7 +1,42 @@
 import { NextResponse } from 'next/server'
 import { mockExpenses, realClients, realMRR, mockMrrHistory } from '@/lib/mock-data'
+import { getSyncedData } from '../sync/route'
 
 export const dynamic = 'force-dynamic'
+
+// Get live data from sync or fall back to mock
+function getLiveData() {
+  const synced = getSyncedData()
+  if (synced) {
+    return {
+      mrr: synced.mrr,
+      activeClients: synced.activeClients,
+      avgRevenuePerClient: synced.activeClients > 0 ? synced.mrr / synced.activeClients : 0,
+      clients: synced.clients.map(c => ({
+        company: c.company,
+        status: c.status,
+        monthly_rate: c.monthly_rate,
+        additional: c.additional || 0,
+      })),
+      expenses: synced.expenses.length > 0 ? synced.expenses : mockExpenses,
+      totalExpenses: synced.totalExpenses > 0 ? synced.totalExpenses : mockExpenses.reduce((s, e) => s + e.amount, 0),
+      oneOffProjects: synced.oneOffProjects,
+      oneOffTotal: synced.oneOffTotal,
+      source: 'synced' as const,
+    }
+  }
+  return {
+    mrr: realMRR.mrr,
+    activeClients: realMRR.active_clients,
+    avgRevenuePerClient: realMRR.avg_revenue_per_client,
+    clients: realClients,
+    expenses: mockExpenses,
+    totalExpenses: mockExpenses.reduce((s, e) => s + e.amount, 0),
+    oneOffProjects: [],
+    oneOffTotal: 0,
+    source: 'mock' as const,
+  }
+}
 
 export interface ScorecardMetric {
   id: string
@@ -62,23 +97,16 @@ export async function GET(request: Request) {
 
   // Monthly goal tracking
   if (type === 'goal') {
-    const currentMRR = realMRR.mrr
+    const live = getLiveData()
+    const currentMRR = live.mrr
 
     // Get goal from synced data or fallback to $50,000
     let monthlyGoal = 50000
-    const currentMonth = new Date().toISOString().slice(0, 7) // Format: "2026-03"
-
-    try {
-      const { getSyncedData } = await import('../sync/route')
-      const synced = getSyncedData()
-      if (synced?.monthlyGoals) {
-        const monthGoal = synced.monthlyGoals.find(g => g.month === currentMonth)
-        if (monthGoal) {
-          monthlyGoal = monthGoal.goal
-        }
-      }
-    } catch {
-      // Fallback to default
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    const synced = getSyncedData()
+    if (synced?.monthlyGoals) {
+      const monthGoal = synced.monthlyGoals.find(g => g.month === currentMonth)
+      if (monthGoal) monthlyGoal = monthGoal.goal
     }
 
     const gap = monthlyGoal - currentMRR
@@ -96,41 +124,39 @@ export async function GET(request: Request) {
       percentOfGoal,
       status,
       month: new Date().toLocaleDateString('en-US', { month: 'long' }),
+      source: live.source,
       timestamp: new Date().toISOString(),
     })
   }
 
   // Valuation data handler
   if (type === 'valuation') {
-    const arr = realMRR.mrr * 12
-    const expenses = mockExpenses.reduce((s, e) => s + e.amount, 0)
-    const monthlyEbitda = realMRR.mrr - expenses
+    const live = getLiveData()
+    const arr = live.mrr * 12
+    const monthlyEbitda = live.mrr - live.totalExpenses
     const annualEbitda = monthlyEbitda * 12
-    const ebitdaMargin = realMRR.mrr > 0 ? (monthlyEbitda / realMRR.mrr) * 100 : 0
+    const ebitdaMargin = live.mrr > 0 ? (monthlyEbitda / live.mrr) * 100 : 0
 
-    // Agency valuations use EBITDA multiples (not ARR like SaaS)
-    // Typical range: 3-6x EBITDA
-    // High-performing agencies (>20% margins, recurring revenue): 6-8x
-    // Premium (tech-enabled, >40% margins): 7-10x
     return NextResponse.json({
-      mrr: realMRR.mrr,
+      mrr: live.mrr,
       arr,
       ebitda: annualEbitda,
       ebitdaMargin,
       valuations: {
-        conservative: Math.round(annualEbitda * 4),   // 4x EBITDA - lower end for agencies
-        market: Math.round(annualEbitda * 5.5),       // 5.5x EBITDA - market rate for recurring agencies
-        premium: Math.round(annualEbitda * 7),        // 7x EBITDA - high-margin, recurring revenue
+        conservative: Math.round(annualEbitda * 4),
+        market: Math.round(annualEbitda * 5.5),
+        premium: Math.round(annualEbitda * 7),
       },
+      source: live.source,
       timestamp: new Date().toISOString(),
     })
   }
 
   // Financial metrics handler
   if (type === 'metrics') {
-    const revenue = realMRR.mrr
-    const expenses = mockExpenses.reduce((s, e) => s + e.amount, 0)
-    const monthlyProfit = revenue - expenses
+    const live = getLiveData()
+    const revenue = live.mrr
+    const monthlyProfit = revenue - live.totalExpenses
     const margin = revenue > 0 ? (monthlyProfit / revenue) * 100 : 0
     const runRate = revenue * 12
 
@@ -151,23 +177,30 @@ export async function GET(request: Request) {
       cashBalance,
       runway,
       burnRate: monthlyProfit < 0 ? Math.abs(monthlyProfit) : 0,
+      source: live.source,
       timestamp: new Date().toISOString(),
     })
   }
 
   // Profit data handler
   if (type === 'profit') {
-    const revenue = realMRR.mrr
-    const expenses = mockExpenses.reduce((s, e) => s + e.amount, 0)
-    const netProfit = revenue - expenses
-    const margin = revenue > 0 ? (netProfit / revenue) * 100 : 0
+    const live = getLiveData()
+    const revenue = live.mrr
+    const netProfit = revenue - live.totalExpenses
+    const totalRevenue = revenue + live.oneOffTotal
+    const totalNetProfit = totalRevenue - live.totalExpenses
+    const margin = totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0
     return NextResponse.json({
       revenue,
-      expenses,
-      expenseBreakdown: mockExpenses,
-      netProfit,
+      oneOffTotal: live.oneOffTotal,
+      oneOffProjects: live.oneOffProjects,
+      totalRevenue,
+      expenses: live.totalExpenses,
+      expenseBreakdown: live.expenses,
+      netProfit: totalNetProfit,
       margin: Math.round(margin * 10) / 10,
       month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      source: live.source,
     })
   }
 
@@ -185,7 +218,8 @@ export async function GET(request: Request) {
 
   // Overhead data handler
   if (type === 'overhead') {
-    const categories = mockExpenses.map((e, i) => ({
+    const live = getLiveData()
+    const categories = live.expenses.map((e, i) => ({
       ...e,
       color: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899'][i % 6],
     }))
@@ -194,27 +228,30 @@ export async function GET(request: Request) {
       categories,
       totalOverhead: total,
       month: new Date().toISOString().slice(0, 7),
-      note: 'Connect Mercury API to auto-categorize transactions.',
+      source: live.source,
       timestamp: new Date().toISOString(),
     })
   }
 
   // Revenue / MRR data handler
   if (type === 'revenue') {
-    const currentMRR = realMRR.mrr
+    const live = getLiveData()
+    const currentMRR = live.mrr
     const history = mockMrrHistory
     const prevMonthEntry = history.length > 1 ? history[history.length - 2] : null
     const previousMRR = prevMonthEntry?.mrr || currentMRR
     const growth = previousMRR > 0 ? ((currentMRR - previousMRR) / previousMRR) * 100 : 0
     return NextResponse.json({
-      clients: realClients,
+      clients: live.clients,
       currentMRR,
       previousMRR,
       growth: Math.round(growth * 10) / 10,
-      activeClients: realMRR.active_clients,
-      avgRevenuePerClient: Math.round(realMRR.avg_revenue_per_client),
+      activeClients: live.activeClients,
+      avgRevenuePerClient: Math.round(live.avgRevenuePerClient),
+      oneOffTotal: live.oneOffTotal,
+      oneOffProjects: live.oneOffProjects,
       history: history.map(h => ({ date: h.date, mrr: h.mrr, activeClients: h.active_clients })),
-      note: 'Xero integration coming soon. Current data reflects active retainer clients.',
+      source: live.source,
       timestamp: new Date().toISOString(),
     })
   }

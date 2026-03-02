@@ -12,6 +12,8 @@ interface ExpenseItem {
 
 interface ProfitData {
   revenue: number
+  oneOffTotal?: number
+  totalRevenue?: number
   expenses: number
   expenseBreakdown: ExpenseItem[]
   netProfit: number
@@ -81,13 +83,23 @@ export default function ProfitCard() {
 
       {/* Revenue & Expenses */}
       <div className="space-y-2 mb-4">
-        {/* Revenue */}
+        {/* MRR Revenue */}
         <div className="flex items-center justify-between py-2 px-3 bg-[#1E293B]/40 rounded-lg">
           <span className="text-sm text-[#94A3B8]">MRR Revenue</span>
           <span className="text-sm font-semibold text-[#F8FAFC]">
             {profit ? formatCurrency(profit.revenue) : '—'}
           </span>
         </div>
+
+        {/* One-Off Projects */}
+        {profit && (profit.oneOffTotal || 0) > 0 && (
+          <div className="flex items-center justify-between py-2 px-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <span className="text-sm text-amber-300">One-Off Projects (YTD)</span>
+            <span className="text-sm font-semibold text-amber-300">
+              {formatCurrency(profit.oneOffTotal || 0)}
+            </span>
+          </div>
+        )}
 
         {/* Expenses with breakdown */}
         <div className="py-2 px-3 bg-[#1E293B]/40 rounded-lg">

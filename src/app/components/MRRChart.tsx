@@ -6,6 +6,13 @@ import { Users, TrendingUp, DollarSign, Building2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { motion } from 'framer-motion'
 
+interface OneOffProject {
+  month: string
+  client: string
+  project: string
+  amount: number
+}
+
 interface RevenueData {
   clients: { company: string; status: string; monthly_rate: number; additional: number }[]
   currentMRR: number
@@ -13,8 +20,10 @@ interface RevenueData {
   growth: number
   activeClients: number
   avgRevenuePerClient: number
+  oneOffTotal?: number
+  oneOffProjects?: OneOffProject[]
   history: { date: string; mrr: number; activeClients: number }[]
-  note?: string
+  source?: string
 }
 
 export default function MRRChart() {
@@ -40,6 +49,8 @@ export default function MRRChart() {
   const growth = data?.growth || 0
   const clients = data?.clients || []
   const history = data?.history || []
+  const oneOffTotal = data?.oneOffTotal || 0
+  const oneOffProjects = data?.oneOffProjects || []
 
   const chartData = history.map(h => ({
     month: new Date(h.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' }),
@@ -97,7 +108,7 @@ export default function MRRChart() {
       <div className="mb-5 max-h-44 overflow-y-auto">
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-3">Active Clients</p>
         <div className="space-y-1.5">
-          {clients.filter(c => c.status === 'Active').map((client, index) => (
+          {clients.filter(c => c.status === 'Active' || c.status === 'active').map((client, index) => (
             <motion.div
               key={client.company}
               initial={{ opacity: 0, x: -10 }}
@@ -107,12 +118,30 @@ export default function MRRChart() {
             >
               <span className="text-sm text-[#94A3B8] truncate max-w-[150px]">{client.company}</span>
               <span className="text-sm font-medium text-white shrink-0">
-                {formatCurrency(client.monthly_rate + client.additional)}/mo
+                {formatCurrency(client.monthly_rate + (client.additional || 0))}/mo
               </span>
             </motion.div>
           ))}
         </div>
       </div>
+
+      {/* One-off projects */}
+      {oneOffTotal > 0 && (
+        <div className="mb-5 bg-gradient-to-br from-amber-500/10 to-amber-600/5 rounded-xl border border-amber-500/20 p-4">
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">One-Off Projects (YTD)</p>
+          <p className="text-xl font-bold text-amber-300 mb-2">{formatCurrency(oneOffTotal)}</p>
+          {oneOffProjects.length > 0 && (
+            <div className="space-y-1">
+              {oneOffProjects.map((p, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className="text-[#94A3B8] truncate max-w-[60%]">{p.month} — {p.client}{p.project ? `: ${p.project}` : ''}</span>
+                  <span className="text-amber-300 font-medium shrink-0">{formatCurrency(p.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MRR history chart */}
       {chartData.length > 0 && (
@@ -147,8 +176,10 @@ export default function MRRChart() {
         </div>
       )}
 
-      {data?.note && (
-        <p className="text-xs text-[#475569] mt-3 border-t border-[#334155]/20 pt-3">{data.note}</p>
+      {data?.source && (
+        <p className="text-xs text-[#475569] mt-3 border-t border-[#334155]/20 pt-3">
+          {data.source === 'synced' ? 'Live from Google Sheet' : 'Using cached data — hit Sync for latest'}
+        </p>
       )}
     </motion.div>
   )

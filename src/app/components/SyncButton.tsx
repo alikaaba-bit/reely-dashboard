@@ -16,8 +16,8 @@ export default function SyncButton() {
       const data = await res.json()
 
       if (data.success) {
-        setMessage(`✓ Synced ${data.clients} clients, ${data.expenses} expenses, ${data.monthly_goals || 0} monthly goals`)
-        setTimeout(() => window.location.reload(), 2000)
+        setMessage(`✓ ${data.clients} clients, $${(data.mrr || 0).toLocaleString()} MRR, ${data.one_off_projects || 0} one-offs`)
+        setTimeout(() => window.location.reload(), 1500)
       } else {
         setMessage(`✗ ${data.error || 'Sync failed'}`)
       }
