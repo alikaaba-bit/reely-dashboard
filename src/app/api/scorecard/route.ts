@@ -4,6 +4,96 @@ import { getSyncedData } from '../sync/route'
 
 export const dynamic = 'force-dynamic'
 
+// Expense categorization: map individual line items into 4 parent categories
+const EXPENSE_CATEGORIES: Record<string, string[]> = {
+  'Payroll': [
+    'payroll', 'salary', 'salaries', 'wages', 'contractor', 'contractors',
+    'freelance', 'freelancer', 'employee', 'compensation', 'bonus', 'bonuses',
+    'labour', 'labor', 'staffing', 'staff', 'team', 'hiring', 'recruitment',
+    'benefits', 'insurance', 'health insurance', 'stipend',
+  ],
+  'Software & Marketing': [
+    'software', 'marketing', 'advertising', 'ads', 'ad spend', 'google ads',
+    'meta ads', 'facebook ads', 'tiktok', 'social media', 'seo', 'sem',
+    'subscription', 'subscriptions', 'saas', 'tools', 'platform', 'hosting',
+    'domain', 'cloud', 'aws', 'api', 'license', 'licenses', 'app',
+    'clickup', 'slack', 'zoom', 'canva', 'figma', 'hubspot', 'crm',
+    'email marketing', 'mailchimp', 'content', 'creative', 'branding',
+    'design', 'website', 'digital', 'media', 'pr', 'influencer',
+    'campaign', 'promotion', 'lead gen',
+  ],
+  'Office & Facilities': [
+    'office', 'rent', 'lease', 'facilities', 'utilities', 'utility',
+    'electricity', 'internet', 'wifi', 'phone', 'mobile', 'supplies',
+    'equipment', 'furniture', 'maintenance', 'cleaning', 'security',
+    'coworking', 'co-working', 'space', 'travel', 'meals', 'food',
+    'entertainment', 'shipping', 'postage', 'courier', 'storage',
+  ],
+  'Bank & Accounting': [
+    'bank', 'banking', 'accounting', 'accountant', 'cpa', 'bookkeeping',
+    'bookkeeper', 'legal', 'lawyer', 'attorney', 'tax', 'taxes',
+    'compliance', 'audit', 'fee', 'fees', 'transaction', 'wire',
+    'transfer', 'interest', 'merchant', 'payment processing', 'stripe',
+    'paypal', 'quickbooks', 'xero', 'incorporation', 'filing',
+    'registration', 'permits', 'insurance',
+  ],
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'Payroll': '#3B82F6',
+  'Software & Marketing': '#8B5CF6',
+  'Office & Facilities': '#10B981',
+  'Bank & Accounting': '#F59E0B',
+}
+
+function categorizeExpenses(expenses: { category: string; amount: number }[]): { category: string; amount: number; color: string }[] {
+  const grouped: Record<string, number> = {
+    'Payroll': 0,
+    'Software & Marketing': 0,
+    'Office & Facilities': 0,
+    'Bank & Accounting': 0,
+  }
+
+  for (const expense of expenses) {
+    const name = expense.category.toLowerCase().trim()
+    let matched = false
+
+    // Check if the expense name already matches a parent category exactly
+    for (const parentCategory of Object.keys(EXPENSE_CATEGORIES)) {
+      if (name === parentCategory.toLowerCase()) {
+        grouped[parentCategory] += expense.amount
+        matched = true
+        break
+      }
+    }
+
+    if (!matched) {
+      // Try keyword matching
+      for (const [parentCategory, keywords] of Object.entries(EXPENSE_CATEGORIES)) {
+        if (keywords.some(keyword => name.includes(keyword))) {
+          grouped[parentCategory] += expense.amount
+          matched = true
+          break
+        }
+      }
+    }
+
+    if (!matched) {
+      // Default unmatched expenses to "Software & Marketing" (operational catch-all)
+      grouped['Software & Marketing'] += expense.amount
+    }
+  }
+
+  // Return only categories with non-zero amounts
+  return Object.entries(grouped)
+    .filter(([, amount]) => amount > 0)
+    .map(([category, amount]) => ({
+      category,
+      amount: Math.round(amount * 100) / 100,
+      color: CATEGORY_COLORS[category] || '#64748B',
+    }))
+}
+
 // Get live data from sync or fall back to mock
 function getLiveData() {
   const synced = getSyncedData()
@@ -190,13 +280,18 @@ export async function GET(request: Request) {
     const totalRevenue = revenue + live.oneOffTotal
     const totalNetProfit = totalRevenue - live.totalExpenses
     const margin = totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0
+
+    // Group expense breakdown into clean categories — always categorize
+    const rawExpenses = live.expenses
+    const expenseBreakdown = categorizeExpenses(rawExpenses)
+
     return NextResponse.json({
       revenue,
       oneOffTotal: live.oneOffTotal,
       oneOffProjects: live.oneOffProjects,
       totalRevenue,
       expenses: live.totalExpenses,
-      expenseBreakdown: live.expenses,
+      expenseBreakdown,
       netProfit: totalNetProfit,
       margin: Math.round(margin * 10) / 10,
       month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
@@ -219,10 +314,10 @@ export async function GET(request: Request) {
   // Overhead data handler
   if (type === 'overhead') {
     const live = getLiveData()
-    const categories = live.expenses.map((e, i) => ({
-      ...e,
-      color: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899'][i % 6],
-    }))
+    // Always group expenses into the 4 parent categories for consistent display
+    const rawExpenses = live.expenses
+    const categories = categorizeExpenses(rawExpenses)
+
     const total = categories.reduce((sum, c) => sum + c.amount, 0)
     return NextResponse.json({
       categories,

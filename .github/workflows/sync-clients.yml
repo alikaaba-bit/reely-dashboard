@@ -1,9 +1,9 @@
-name: Sync Clients from Google Sheets
+name: Daily Google Sheets Sync
 
 on:
   schedule:
-    # Every Friday at 5:00 PM PST (1:00 AM UTC Saturday)
-    - cron: '0 1 * * 6'
+    # Run at 9:00 AM UTC every day
+    - cron: '0 9 * * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
