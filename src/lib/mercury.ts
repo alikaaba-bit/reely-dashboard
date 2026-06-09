@@ -12,7 +12,7 @@ export interface MercuryAccount {
 export interface AccountSummary {
   name: string
   balance: number
-  type: 'mercury' | 'highbeam'
+  type: 'mercury' | 'highbeam' | 'wise'
   accountId?: string
 }
 

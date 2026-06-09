@@ -2,13 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { formatCurrency } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, Pencil, Check, X } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, Pencil, Check, X, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 interface AccountSummary {
   name: string
   balance: number
-  type: 'mercury' | 'highbeam'
+  type: 'mercury' | 'highbeam' | 'wise'
+}
+
+// Mercury is pulled live from the bank API; everything else is a manual
+// balance the user fills in from the dashboard.
+const isManual = (type: AccountSummary['type']) => type !== 'mercury'
+
+const BADGE_STYLES: Record<AccountSummary['type'], { label: string; className: string }> = {
+  mercury: { label: 'Mercury', className: 'bg-blue-500/20 text-blue-400' },
+  highbeam: { label: 'Highbeam', className: 'bg-amber-500/20 text-amber-400' },
+  wise: { label: 'Wise', className: 'bg-emerald-500/20 text-emerald-400' },
 }
 
 interface CashData {
@@ -17,6 +27,19 @@ interface CashData {
   balance: number
   history: { date: string; balance: number }[]
   mockMode?: boolean
+  source?: string
+  timestamp?: string
+}
+
+function timeAgo(iso?: string): string {
+  if (!iso) return ''
+  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
 }
 
 interface ProfitData {
@@ -32,18 +55,24 @@ export default function CashCard() {
   const [editing, setEditing] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   const fetchData = () => {
+    setRefreshing(true)
     Promise.all([
-      fetch('/api/mercury').then(res => res.json()),
-      fetch('/api/scorecard?type=profit').then(res => res.json())
+      fetch('/api/mercury', { cache: 'no-store' }).then(res => res.json()),
+      fetch('/api/scorecard?type=profit', { cache: 'no-store' }).then(res => res.json())
     ])
       .then(([mercury, profit]) => {
         setData(mercury)
         setProfitData(profit)
         setLoading(false)
+        setRefreshing(false)
       })
-      .catch(() => setLoading(false))
+      .catch(() => {
+        setLoading(false)
+        setRefreshing(false)
+      })
   }
 
   useEffect(() => { fetchData() }, [])
@@ -114,9 +143,19 @@ export default function CashCard() {
               <p className="text-xs text-[#64748B]">All accounts combined</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full">
-            <ArrowUpRight className="w-4 h-4" />
-            <span className="text-sm font-medium">Live</span>
+          <div className="flex items-center gap-2">
+            {data?.timestamp && (
+              <span className="text-xs text-[#64748B]">Updated {timeAgo(data.timestamp)}</span>
+            )}
+            <button
+              onClick={fetchData}
+              disabled={refreshing}
+              title="Refresh balances"
+              className="flex items-center gap-1 text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 px-3 py-1 rounded-full transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="text-sm font-medium">{refreshing ? 'Syncing' : 'Refresh'}</span>
+            </button>
           </div>
         </div>
 
@@ -150,12 +189,8 @@ export default function CashCard() {
               >
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-[#94A3B8]">{acc.name}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    acc.type === 'mercury'
-                      ? 'bg-blue-500/20 text-blue-400'
-                      : 'bg-amber-500/20 text-amber-400'
-                  }`}>
-                    {acc.type === 'mercury' ? 'Mercury' : 'Highbeam'}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${BADGE_STYLES[acc.type].className}`}>
+                    {BADGE_STYLES[acc.type].label}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -187,7 +222,7 @@ export default function CashCard() {
                   ) : (
                     <>
                       <span className="text-sm font-semibold text-white">{formatCurrency(acc.balance)}</span>
-                      {acc.type === 'highbeam' && (
+                      {isManual(acc.type) && (
                         <button
                           onClick={() => handleEdit(acc)}
                           className="p-1 text-[#475569] hover:text-amber-400 transition-colors"
