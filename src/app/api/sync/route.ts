@@ -171,7 +171,11 @@ export async function POST(request: Request) {
       const category = cols[0]
       const amount = parseFloat(cols[1]?.replace(/[$,]/g, '') || '0')
 
-      if (!category || category.toLowerCase().includes('total') || amount === 0) continue
+      // Skip header/section rows whose "amount" cell isn't numeric (e.g. the
+      // "Item / Service | Amount" header row parses to NaN). A NaN slipping
+      // through here poisoned a whole overhead bucket and silently dropped
+      // ~$8k of expenses from the card, leaving only the $153 bank total.
+      if (!category || category.toLowerCase().includes('total') || !Number.isFinite(amount) || amount === 0) continue
 
       expenses.push({ category, amount })
       totalExpenses += amount

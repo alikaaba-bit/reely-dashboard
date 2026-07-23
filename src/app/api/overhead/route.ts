@@ -23,6 +23,8 @@ function categorizeExpenses(expenses: { category: string; amount: number }[]) {
   const grouped: Record<string, number> = { 'Payroll': 0, 'Software & Marketing': 0, 'Office & Facilities': 0, 'Bank & Accounting': 0 }
 
   for (const expense of expenses) {
+    // Defensive: a non-finite amount would turn its bucket into NaN and drop it
+    if (!Number.isFinite(expense.amount)) continue
     const name = expense.category.toLowerCase().trim()
     let matched = false
     for (const parentCategory of Object.keys(EXPENSE_CATEGORIES)) {
