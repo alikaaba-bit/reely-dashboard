@@ -24,6 +24,15 @@ interface OneOffProject {
 interface ExpenseRow {
   category: string
   amount: number
+  // The sheet's own section header this row sits under (e.g. "Marketing").
+  // Authoritative — beats keyword-guessing off the item name downstream.
+  section: string
+}
+
+interface PayrollRow {
+  employee: string
+  amount: number
+  allocation: string
 }
 
 interface MonthlyGoal {
@@ -40,6 +49,8 @@ let syncedData: {
   oneOffTotal: number
   expenses: ExpenseRow[]
   totalExpenses: number
+  payroll: PayrollRow[]
+  totalPayroll: number
   monthlyGoals: MonthlyGoal[]
   lastSync: string
 } | null = null
@@ -161,24 +172,61 @@ export async function POST(request: Request) {
     const expensesCsv = await expensesRes.text()
     const expenseLines = expensesCsv.trim().split('\n')
 
+    // CSV layout:
+    //   Col A (0): Item / Service | Col B (1): Amount   | Col C (2): Remarks
+    //   Col E (4): Employee       | Col F (5): Monthly  | Col G (6): Allocation
+    // Two independent blocks on the same tab. Operating expenses are grouped
+    // under section headers (a row with a label and no amount, closed by a
+    // "Subtotal — X" row); payroll is grouped under "Full-Time Employees",
+    // "Shared Employees" and "Owner / Contractor" headers.
     const expenses: ExpenseRow[] = []
+    const payroll: PayrollRow[] = []
     let totalExpenses = 0
+    let totalPayroll = 0
+    let currentSection = 'Uncategorized'
 
     for (let i = 1; i < expenseLines.length; i++) {
       const cols = parseCSVLine(expenseLines[i])
       if (cols.length < 2) continue
 
+      // --- Operating expenses (cols A-B) ---
       const category = cols[0]
       const amount = parseFloat(cols[1]?.replace(/[$,]/g, '') || '0')
+      const lowerCategory = category?.toLowerCase() || ''
 
-      // Skip header/section rows whose "amount" cell isn't numeric (e.g. the
-      // "Item / Service | Amount" header row parses to NaN). A NaN slipping
-      // through here poisoned a whole overhead bucket and silently dropped
-      // ~$8k of expenses from the card, leaving only the $153 bank total.
-      if (!category || category.toLowerCase().includes('total') || !Number.isFinite(amount) || amount === 0) continue
+      // "Subtotal — X" and "TOTAL OPERATING EXPENSES" both contain "total" and
+      // must never be counted as line items — they would double the total.
+      const isTotalRow = lowerCategory.includes('total')
 
-      expenses.push({ category, amount })
-      totalExpenses += amount
+      if (category && !isTotalRow) {
+        if (!Number.isFinite(amount) || amount === 0) {
+          // A label with no amount is a section header ("Marketing"), unless
+          // it is the "Item / Service | Amount" column header or a sheet note.
+          if (lowerCategory !== 'item / service' && !category.startsWith('<<')) {
+            currentSection = category
+          }
+        } else {
+          expenses.push({ category, amount, section: currentSection })
+          totalExpenses += amount
+        }
+      }
+
+      // --- Payroll (cols E-G), parsed independently of the left block ---
+      const employee = cols[4] || ''
+      const payAmount = parseFloat(cols[5]?.replace(/[$,]/g, '') || '0')
+      const lowerEmployee = employee.toLowerCase()
+
+      if (
+        employee &&
+        !lowerEmployee.includes('total') &&
+        !lowerEmployee.includes('employee') &&
+        !employee.startsWith('<<') &&
+        Number.isFinite(payAmount) &&
+        payAmount > 0
+      ) {
+        payroll.push({ employee, amount: payAmount, allocation: cols[6] || '' })
+        totalPayroll += payAmount
+      }
     }
 
     // Parse Scorecard Tab (Monthly Goals)
@@ -236,6 +284,8 @@ export async function POST(request: Request) {
       oneOffTotal: totalOneOff,
       expenses,
       totalExpenses,
+      payroll,
+      totalPayroll,
       monthlyGoals,
       lastSync: new Date().toISOString(),
     }
@@ -250,9 +300,12 @@ export async function POST(request: Request) {
       one_off_total: totalOneOff,
       expenses: expenses.length,
       total_expenses: totalExpenses,
+      payroll_count: payroll.length,
+      total_payroll: totalPayroll,
+      total_monthly_cost: totalExpenses + totalPayroll,
       monthly_goals: monthlyGoals.length,
       client_list: clients.map(c => `${c.company} (${c.status}) — $${c.monthly_rate}`),
-      message: `Synced ${clients.length} clients (${activeCount} active, MRR $${totalMRR.toLocaleString()}), ${oneOffProjects.length} one-off projects ($${totalOneOff.toLocaleString()}), ${expenses.length} expenses`,
+      message: `Synced ${clients.length} clients (${activeCount} active, MRR $${totalMRR.toLocaleString()}), ${oneOffProjects.length} one-off projects ($${totalOneOff.toLocaleString()}), ${expenses.length} expenses ($${totalExpenses.toLocaleString()}), ${payroll.length} payroll rows ($${totalPayroll.toLocaleString()})`,
     })
   } catch (error) {
     return NextResponse.json({
@@ -275,6 +328,9 @@ export async function GET() {
       mrr: syncedData.mrr,
       expenses_count: syncedData.expenses.length,
       total_expenses: syncedData.totalExpenses,
+      payroll_count: syncedData.payroll.length,
+      total_payroll: syncedData.totalPayroll,
+      total_monthly_cost: syncedData.totalExpenses + syncedData.totalPayroll,
       monthly_goals_count: syncedData.monthlyGoals.length,
     } : null
   })

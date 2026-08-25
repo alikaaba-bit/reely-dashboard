@@ -1,103 +1,18 @@
 import { NextResponse } from 'next/server'
 import { mockExpenses, realClients, realMRR, mockMrrHistory } from '@/lib/mock-data'
+import { categorizeBySection, colorFor } from '@/lib/expense-categories'
 import { getSyncedData } from '../sync/route'
 
 export const dynamic = 'force-dynamic'
-
-// Expense categorization: map individual line items into 4 parent categories
-const EXPENSE_CATEGORIES: Record<string, string[]> = {
-  'Payroll': [
-    'payroll', 'salary', 'salaries', 'wages', 'contractor', 'contractors',
-    'freelance', 'freelancer', 'employee', 'compensation', 'bonus', 'bonuses',
-    'labour', 'labor', 'staffing', 'staff', 'team', 'hiring', 'recruitment',
-    'benefits', 'insurance', 'health insurance', 'stipend',
-  ],
-  'Software & Marketing': [
-    'software', 'marketing', 'advertising', 'ads', 'ad spend', 'google ads',
-    'meta ads', 'facebook ads', 'tiktok', 'social media', 'seo', 'sem',
-    'subscription', 'subscriptions', 'saas', 'tools', 'platform', 'hosting',
-    'domain', 'cloud', 'aws', 'api', 'license', 'licenses', 'app',
-    'clickup', 'slack', 'zoom', 'canva', 'figma', 'hubspot', 'crm',
-    'email marketing', 'mailchimp', 'content', 'creative', 'branding',
-    'design', 'website', 'digital', 'media', 'pr', 'influencer',
-    'campaign', 'promotion', 'lead gen',
-  ],
-  'Office & Facilities': [
-    'office', 'rent', 'lease', 'facilities', 'utilities', 'utility',
-    'electricity', 'internet', 'wifi', 'phone', 'mobile', 'supplies',
-    'equipment', 'furniture', 'maintenance', 'cleaning', 'security',
-    'coworking', 'co-working', 'space', 'travel', 'meals', 'food',
-    'entertainment', 'shipping', 'postage', 'courier', 'storage',
-  ],
-  'Bank & Accounting': [
-    'bank', 'banking', 'accounting', 'accountant', 'cpa', 'bookkeeping',
-    'bookkeeper', 'legal', 'lawyer', 'attorney', 'tax', 'taxes',
-    'compliance', 'audit', 'fee', 'fees', 'transaction', 'wire',
-    'transfer', 'interest', 'merchant', 'payment processing', 'stripe',
-    'paypal', 'quickbooks', 'xero', 'incorporation', 'filing',
-    'registration', 'permits', 'insurance',
-  ],
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  'Payroll': '#3B82F6',
-  'Software & Marketing': '#8B5CF6',
-  'Office & Facilities': '#10B981',
-  'Bank & Accounting': '#F59E0B',
-}
-
-function categorizeExpenses(expenses: { category: string; amount: number }[]): { category: string; amount: number; color: string }[] {
-  const grouped: Record<string, number> = {
-    'Payroll': 0,
-    'Software & Marketing': 0,
-    'Office & Facilities': 0,
-    'Bank & Accounting': 0,
-  }
-
-  for (const expense of expenses) {
-    const name = expense.category.toLowerCase().trim()
-    let matched = false
-
-    // Check if the expense name already matches a parent category exactly
-    for (const parentCategory of Object.keys(EXPENSE_CATEGORIES)) {
-      if (name === parentCategory.toLowerCase()) {
-        grouped[parentCategory] += expense.amount
-        matched = true
-        break
-      }
-    }
-
-    if (!matched) {
-      // Try keyword matching
-      for (const [parentCategory, keywords] of Object.entries(EXPENSE_CATEGORIES)) {
-        if (keywords.some(keyword => name.includes(keyword))) {
-          grouped[parentCategory] += expense.amount
-          matched = true
-          break
-        }
-      }
-    }
-
-    if (!matched) {
-      // Default unmatched expenses to "Software & Marketing" (operational catch-all)
-      grouped['Software & Marketing'] += expense.amount
-    }
-  }
-
-  // Return only categories with non-zero amounts
-  return Object.entries(grouped)
-    .filter(([, amount]) => amount > 0)
-    .map(([category, amount]) => ({
-      category,
-      amount: Math.round(amount * 100) / 100,
-      color: CATEGORY_COLORS[category] || '#64748B',
-    }))
-}
 
 // Get live data from sync or fall back to mock
 function getLiveData() {
   const synced = getSyncedData()
   if (synced) {
+    const operatingExpenses = synced.totalExpenses > 0
+      ? synced.totalExpenses
+      : mockExpenses.reduce((s, e) => s + e.amount, 0)
+
     return {
       mrr: synced.mrr,
       activeClients: synced.activeClients,
@@ -109,19 +24,29 @@ function getLiveData() {
         additional: c.additional || 0,
       })),
       expenses: synced.expenses.length > 0 ? synced.expenses : mockExpenses,
-      totalExpenses: synced.totalExpenses > 0 ? synced.totalExpenses : mockExpenses.reduce((s, e) => s + e.amount, 0),
+      operatingExpenses,
+      totalPayroll: synced.totalPayroll,
+      // Profit, EBITDA and valuation all key off this. It must be the sheet's
+      // "TOTAL MONTHLY COST (Expenses + Payroll)" — payroll was previously
+      // excluded, overstating annual EBITDA by ~$205k.
+      totalExpenses: operatingExpenses + synced.totalPayroll,
       oneOffProjects: synced.oneOffProjects,
       oneOffTotal: synced.oneOffTotal,
       source: 'synced' as const,
     }
   }
+
+  // mockExpenses already carries its own Payroll row, so no separate add here
+  const mockTotal = mockExpenses.reduce((s, e) => s + e.amount, 0)
   return {
     mrr: realMRR.mrr,
     activeClients: realMRR.active_clients,
     avgRevenuePerClient: realMRR.avg_revenue_per_client,
     clients: realClients,
     expenses: mockExpenses,
-    totalExpenses: mockExpenses.reduce((s, e) => s + e.amount, 0),
+    operatingExpenses: mockTotal,
+    totalPayroll: 0,
+    totalExpenses: mockTotal,
     oneOffProjects: [],
     oneOffTotal: 0,
     source: 'mock' as const,
@@ -304,9 +229,12 @@ export async function GET(request: Request) {
     const totalNetProfit = totalRevenue - live.totalExpenses
     const margin = totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0
 
-    // Group expense breakdown into clean categories — always categorize
-    const rawExpenses = live.expenses
-    const expenseBreakdown = categorizeExpenses(rawExpenses)
+    // Group by the sheet's own sections, then add payroll so the breakdown
+    // sums to live.totalExpenses rather than to operating expenses alone.
+    const expenseBreakdown = categorizeBySection(live.expenses)
+    if (live.totalPayroll > 0) {
+      expenseBreakdown.push({ category: 'Payroll', amount: live.totalPayroll, color: colorFor('Payroll') })
+    }
 
     return NextResponse.json({
       revenue,
@@ -314,6 +242,8 @@ export async function GET(request: Request) {
       oneOffProjects: live.oneOffProjects,
       totalRevenue,
       expenses: live.totalExpenses,
+      operatingExpenses: live.operatingExpenses,
+      payroll: live.totalPayroll,
       expenseBreakdown,
       netProfit: totalNetProfit,
       margin: Math.round(margin * 10) / 10,
@@ -337,14 +267,18 @@ export async function GET(request: Request) {
   // Overhead data handler
   if (type === 'overhead') {
     const live = getLiveData()
-    // Always group expenses into the 4 parent categories for consistent display
-    const rawExpenses = live.expenses
-    const categories = categorizeExpenses(rawExpenses)
+    // Same grouping as /api/overhead — sheet sections plus payroll
+    const categories = categorizeBySection(live.expenses)
+    if (live.totalPayroll > 0) {
+      categories.push({ category: 'Payroll', amount: live.totalPayroll, color: colorFor('Payroll') })
+    }
 
     const total = categories.reduce((sum, c) => sum + c.amount, 0)
     return NextResponse.json({
       categories,
       totalOverhead: total,
+      operatingExpenses: live.operatingExpenses,
+      payroll: live.totalPayroll,
       month: new Date().toISOString().slice(0, 7),
       source: live.source,
       timestamp: new Date().toISOString(),
