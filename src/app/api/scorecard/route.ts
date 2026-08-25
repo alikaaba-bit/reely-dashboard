@@ -170,6 +170,29 @@ function getMonthLabel(month: string): string {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
+// MRR targets by month (YYYY-MM). The Google Sheet's Scorecard tab currently
+// parses to zero monthly goals, so these are the effective targets on the
+// dashboard. A synced sheet goal, if one ever appears, still wins.
+// Months outside this range clamp to the nearest end (before Sept 2026 -> 65k,
+// after Dec 2026 -> 95k).
+const MONTHLY_TARGETS: Record<string, number> = {
+  '2026-09': 65000,
+  '2026-10': 75000,
+  '2026-11': 90000,
+  '2026-12': 95000,
+}
+
+function getMonthlyTarget(month: string): number {
+  const explicit = MONTHLY_TARGETS[month]
+  if (explicit) return explicit
+
+  const keys = Object.keys(MONTHLY_TARGETS).sort()
+  const first = keys[0]
+  const last = keys[keys.length - 1]
+  if (month < first) return MONTHLY_TARGETS[first]
+  return MONTHLY_TARGETS[last]
+}
+
 function defaultMetrics(): ScorecardMetric[] {
   return [
     { id: 'revenue', name: 'Monthly Revenue', goal: null, actual: null, unit: 'currency' },
@@ -190,9 +213,9 @@ export async function GET(request: Request) {
     const live = getLiveData()
     const currentMRR = live.mrr
 
-    // Get goal from synced data or fallback to $50,000
-    let monthlyGoal = 50000
-    const currentMonth = new Date().toISOString().slice(0, 7)
+    // Synced sheet goal wins; otherwise use the month's target
+    const currentMonth = getCurrentMonth()
+    let monthlyGoal = getMonthlyTarget(currentMonth)
     const synced = getSyncedData()
     if (synced?.monthlyGoals) {
       const monthGoal = synced.monthlyGoals.find(g => g.month === currentMonth)
